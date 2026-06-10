@@ -94,7 +94,4 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            cd android-app
-            chmod +x gradlew
-            ./gradlew --no-daemon connectedDebugAndroidTest
+          script: cd android-app && chmod +x gradlew && ./gradlew --no-daemon connectedDebugAndroidTest
