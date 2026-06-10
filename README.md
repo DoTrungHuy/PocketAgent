@@ -21,7 +21,7 @@ Android 会显示标准安装确认。AgentPad 不要求安装 Termux、Google P
 | 版本 | 状态 | 目标 |
 | --- | --- | --- |
 | `v0.1.0-dev` Termux Lite | 两台平板核心链路已验证 | 保留兼容版本与技术基线 |
-| `v0.2.0-alpha.1` Native Core | 发布准备中 | 独立 APK、模型配置、任务计划、审批和授权文件处理 |
+| `v0.2.0-alpha.1` Native Core | 已发布 | 独立 APK、模型配置、任务计划、审批和授权文件处理 |
 | `v0.3.0-alpha` Device Agent | 规划完成 | 无障碍跨应用操作和可选视觉理解 |
 | `v0.4.0-alpha` Runtime | 可行性验证待办 | 独立签名 Runtime APK，提供受限开发工具 |
 
