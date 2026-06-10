@@ -1,0 +1,79 @@
+{
+  "deepseek": {
+    "name": "DeepSeek",
+    "endpoint": "https://api.deepseek.com/chat/completions",
+    "defaultModel": "deepseek-v4-flash",
+    "modelHint": "deepseek-v4-flash / deepseek-v4-pro",
+    "mainland": true
+  },
+  "dashscope": {
+    "name": "阿里云百炼 / 通义千问",
+    "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "defaultModel": "qwen-plus",
+    "modelHint": "在百炼控制台中可用的模型名称",
+    "mainland": true
+  },
+  "zhipu": {
+    "name": "智谱 GLM",
+    "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "defaultModel": "glm-5.1",
+    "modelHint": "在智谱开放平台中可用的模型名称",
+    "mainland": true
+  },
+  "moonshot": {
+    "name": "Kimi / Moonshot",
+    "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+    "defaultModel": "kimi-k2.5",
+    "modelHint": "在 Moonshot 控制台中可用的模型名称",
+    "mainland": true
+  },
+  "minimax": {
+    "name": "MiniMax 中国大陆",
+    "endpoint": "https://api.minimaxi.com/v1/chat/completions",
+    "defaultModel": "MiniMax-M2.7",
+    "modelHint": "在 MiniMax 中国大陆平台中可用的模型名称",
+    "mainland": true
+  },
+  "siliconflow": {
+    "name": "硅基流动 SiliconFlow",
+    "endpoint": "https://api.siliconflow.cn/v1/chat/completions",
+    "defaultModel": "",
+    "modelHint": "在硅基流动控制台中可用的模型 ID",
+    "mainland": true
+  },
+  "volcengine": {
+    "name": "火山方舟 / 豆包",
+    "endpoint": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    "defaultModel": "doubao-seed-2-0-lite-260215",
+    "modelHint": "填写火山方舟推理接入点 ID",
+    "mainland": true
+  },
+  "qianfan": {
+    "name": "百度智能云千帆",
+    "endpoint": "https://qianfan.baidubce.com/v2/chat/completions",
+    "defaultModel": "",
+    "modelHint": "填写千帆平台支持的模型名称",
+    "mainland": true
+  },
+  "custom": {
+    "name": "自定义 OpenAI-compatible 接口",
+    "endpoint": "",
+    "defaultModel": "",
+    "modelHint": "填写服务商提供的模型名称",
+    "mainland": true
+  },
+  "openai": {
+    "name": "OpenAI（可选，非大陆验收依赖）",
+    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "defaultModel": "gpt-4.1-mini",
+    "modelHint": "填写账号可用的模型名称",
+    "mainland": false
+  },
+  "anthropic_compatible": {
+    "name": "Anthropic-compatible（可选）",
+    "endpoint": "",
+    "defaultModel": "",
+    "modelHint": "仅用于提供 OpenAI-compatible 转换接口的服务",
+    "mainland": false
+  }
+}

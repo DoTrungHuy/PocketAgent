@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+dist/
+build/
+.agentpad/
+secrets.env
+*.log
+*.pid
+*.bak
+
+# Local Android toolchain and IDE state
+.tools/
+.gradle/
+.idea/
+local.properties
+*.iml
+*.jks
+*.keystore
+
+# Android build products
+android-app/.gradle/
+android-app/**/build/
+android-app/captures/
+android-app/.kotlin/

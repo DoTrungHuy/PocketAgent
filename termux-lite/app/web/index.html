@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AgentPad</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f0e7;
+      --panel: #fffdf8;
+      --ink: #20231f;
+      --muted: #74786f;
+      --accent: #155e4b;
+      --line: #ded8ca;
+      --user: #dcefe7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Noto Sans SC", sans-serif;
+    }
+    .app { max-width: 920px; min-height: 100vh; margin: auto; display: flex; flex-direction: column; }
+    header {
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, .92);
+      position: sticky; top: 0; z-index: 2;
+    }
+    h1 { margin: 0; font: 700 24px/1.2 ui-monospace, monospace; letter-spacing: -.04em; }
+    #status { margin-top: 6px; color: var(--muted); font-size: 13px; }
+    #messages { flex: 1; padding: 24px 18px 150px; }
+    .message {
+      max-width: 82%;
+      margin: 0 0 16px;
+      padding: 13px 15px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      line-height: 1.65;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .user { margin-left: auto; background: var(--user); border-color: #bdd8cc; }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    form {
+      position: fixed;
+      left: 50%; bottom: 0; transform: translateX(-50%);
+      width: min(920px, 100%);
+      padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+      background: rgba(244, 240, 231, .96);
+      display: grid; grid-template-columns: 1fr auto; gap: 10px;
+    }
+    textarea {
+      width: 100%; min-height: 54px; max-height: 170px; resize: vertical;
+      border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+      background: var(--panel); color: var(--ink); font: inherit;
+    }
+    button {
+      border: 0; border-radius: 14px; padding: 0 20px;
+      background: var(--accent); color: white; font: 700 15px/1 system-ui;
+    }
+    button:disabled { opacity: .55; }
+    .tool { color: var(--muted); font-size: 12px; margin: -9px 0 14px 8px; }
+    @media (max-width: 600px) {
+      .message { max-width: 94%; }
+      header { padding-inline: 16px; }
+      #messages { padding-inline: 12px; }
+      form { padding-inline: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>AgentPad</h1>
+      <div id="status">正在读取本机状态...</div>
+    </header>
+    <section id="messages">
+      <div class="message"><div class="meta">AgentPad</div>这是运行在平板本机的轻量 Agent。它默认只能访问 AgentPad 工作目录。</div>
+    </section>
+    <form id="form">
+      <textarea id="input" placeholder="输入任务，Ctrl/Command + Enter 发送" required></textarea>
+      <button id="send" type="submit">发送</button>
+    </form>
+  </main>
+  <script>
+    const messages = document.querySelector("#messages");
+    const form = document.querySelector("#form");
+    const input = document.querySelector("#input");
+    const send = document.querySelector("#send");
+    const status = document.querySelector("#status");
+
+    function addMessage(role, text) {
+      const el = document.createElement("div");
+      el.className = "message " + (role === "你" ? "user" : "");
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = role;
+      el.append(meta, document.createTextNode(text));
+      messages.append(el);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+
+    fetch("/api/status").then(r => r.json()).then(data => {
+      const toolState = data.toolsEnabled ? "文件工具已启用" : "纯聊天模式";
+      status.textContent = `${data.provider || "未配置"} · ${data.model || "未配置模型"} · ${toolState} · 命令工具${data.shellEnabled ? "已启用" : "已关闭"}`;
+    }).catch(() => { status.textContent = "状态读取失败"; });
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      addMessage("你", text);
+      input.value = "";
+      send.disabled = true;
+      send.textContent = "处理中";
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, session: "web" })
+        });
+        const data = await response.json();
+        if (!data.ok) throw new Error(data.error || "请求失败");
+        for (const event of data.events || []) {
+          const tool = document.createElement("div");
+          tool.className = "tool";
+          tool.textContent = `已调用工具：${event.tool}`;
+          messages.append(tool);
+        }
+        addMessage("AgentPad", data.reply || "模型没有返回文本。");
+      } catch (error) {
+        addMessage("系统", "错误：" + error.message);
+      } finally {
+        send.disabled = false;
+        send.textContent = "发送";
+        input.focus();
+      }
+    });
+
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        form.requestSubmit();
+      }
+    });
+  </script>
+</body>
+</html>

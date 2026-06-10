@@ -1,0 +1,3 @@
+-keepattributes *Annotation*
+-keep class androidx.room.** { *; }
+-dontwarn org.json.**
