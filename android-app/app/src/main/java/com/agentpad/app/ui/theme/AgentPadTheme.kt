@@ -6,24 +6,24 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val Graphite = Color(0xFF070A0D)
-val GraphiteRaised = Color(0xFF0E1318)
-val GraphiteSoft = Color(0xFF171E25)
-val ElectricCyan = Color(0xFF46E6D2)
-val ElectricCyanDim = Color(0xFF207D77)
-val Mist = Color(0xFFEAF7F5)
-val Steel = Color(0xFF8FA1A9)
-val Warning = Color(0xFFFFC46B)
-val Danger = Color(0xFFFF7A84)
-val Success = Color(0xFF68D99A)
+val Graphite = Color(0xFF14171B)
+val GraphiteRaised = Color(0xFF20252B)
+val GraphiteSoft = Color(0xFF2B323A)
+val ElectricCyan = Color(0xFF7DEFE1)
+val ElectricCyanDim = Color(0xFF3DBDB1)
+val Mist = Color(0xFFF5FAF9)
+val Steel = Color(0xFFC0CBD1)
+val Warning = Color(0xFFFFCF75)
+val Danger = Color(0xFFFF8E98)
+val Success = Color(0xFF83E5AD)
 
 private val AgentPadColors = darkColorScheme(
     primary = ElectricCyan,
-    onPrimary = Color(0xFF001F1C),
-    primaryContainer = Color(0xFF103A36),
-    onPrimaryContainer = Color(0xFFB8FFF6),
-    secondary = Color(0xFF9CCDC7),
-    onSecondary = Color(0xFF06201D),
+    onPrimary = Color(0xFF08211E),
+    primaryContainer = Color(0xFF245551),
+    onPrimaryContainer = Color(0xFFE8FFFC),
+    secondary = Color(0xFFC3DFDA),
+    onSecondary = Color(0xFF102421),
     background = Graphite,
     onBackground = Mist,
     surface = GraphiteRaised,
@@ -31,8 +31,8 @@ private val AgentPadColors = darkColorScheme(
     surfaceVariant = GraphiteSoft,
     onSurfaceVariant = Steel,
     error = Danger,
-    onError = Color(0xFF370006),
-    outline = Color(0xFF263640)
+    onError = Color(0xFF3D0008),
+    outline = Color(0xFF6B7882)
 )
 
 @Composable
