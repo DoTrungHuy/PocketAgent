@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import com.agentpad.app.ui.AgentPadRoot
+import com.agentpad.app.ui.CodexAgentPadRoot
 import com.agentpad.app.ui.AgentPadViewModel
 import com.agentpad.app.ui.theme.AgentPadTheme
 
@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AgentPadTheme {
-                AgentPadRoot(
+                CodexAgentPadRoot(
                     viewModel = viewModel,
                     onChooseDocument = {
                         openDocument.launch(
