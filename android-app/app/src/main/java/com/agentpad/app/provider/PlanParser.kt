@@ -4,54 +4,66 @@ import com.agentpad.app.domain.PlannedAction
 import com.agentpad.app.domain.RiskLevel
 import com.agentpad.app.domain.TaskPlan
 import com.agentpad.app.policy.ApprovalPolicy
+import org.json.JSONException
 import org.json.JSONObject
 
 class PlanParser(private val policy: ApprovalPolicy) {
     fun parse(goal: String, raw: String): TaskPlan {
-        val json = extractJson(raw)
-        val root = JSONObject(json)
-        val actionsJson = root.optJSONArray("actions")
-        val actions = buildList {
-            if (actionsJson != null) {
-                for (index in 0 until minOf(actionsJson.length(), MAX_ACTIONS)) {
-                    val item = actionsJson.optJSONObject(index) ?: continue
-                    val tool = item.optString("tool").trim()
-                    if (tool !in policy.knownTools()) continue
-                    val arguments = item.optJSONObject("arguments")
+        try {
+            val root = JSONObject(extractJson(raw))
+            val actionsJson = root.getJSONArray("actions")
+            require(actionsJson.length() in 1..MAX_ACTIONS) {
+                "计划步骤数量必须在 1 到 $MAX_ACTIONS 之间"
+            }
+            val actions = buildList {
+                for (index in 0 until actionsJson.length()) {
+                    val item = actionsJson.getJSONObject(index)
+                    val tool = item.getString("tool").trim()
+                    require(tool.isNotEmpty()) { "计划步骤缺少工具名称" }
+                    require(tool in policy.knownTools()) { "计划包含未知工具：$tool" }
+
+                    val arguments = when {
+                        !item.has("arguments") || item.isNull("arguments") -> null
+                        else -> item.getJSONObject("arguments")
+                    }
                     val argumentMap = buildMap {
-                        if (arguments != null) {
-                            arguments.keys().forEach { key ->
-                                put(key, arguments.optString(key))
+                        arguments?.keys()?.forEach { key ->
+                            val value = arguments.get(key)
+                            require(value is String || value is Number || value is Boolean) {
+                                "工具参数必须是字符串、数字或布尔值"
                             }
+                            put(key, value.toString())
                         }
                     }
-                    add(
-                        policy.normalize(
-                            PlannedAction(
-                                title = item.optString("title", tool).take(MAX_TEXT),
-                                description = item.optString("description").take(MAX_TEXT),
-                                tool = tool,
-                                arguments = argumentMap,
-                                risk = parseRisk(item.optString("risk")),
-                                reversible = item.optBoolean("reversible", false)
-                            )
+                    val action = policy.normalize(
+                        PlannedAction(
+                            title = item.optString("title", tool).take(MAX_TEXT),
+                            description = item.optString("description").take(MAX_TEXT),
+                            tool = tool,
+                            arguments = argumentMap,
+                            risk = parseRisk(item.optString("risk")),
+                            reversible = item.optBoolean("reversible", false)
                         )
                     )
+                    require(action.risk != RiskLevel.FORBIDDEN) {
+                        "计划包含永久禁止的操作：$tool"
+                    }
+                    add(action)
                 }
             }
+            return TaskPlan(
+                goal = goal.take(MAX_GOAL),
+                title = root.optString("title", "新任务").take(MAX_TEXT),
+                summary = root.optString("summary").take(MAX_TEXT),
+                actions = actions,
+                stopCondition = root.optString(
+                    "stopCondition",
+                    "目标完成、用户取消或出现无法安全处理的错误"
+                ).take(MAX_TEXT)
+            )
+        } catch (failure: JSONException) {
+            throw IllegalArgumentException("模型返回的任务计划格式无效", failure)
         }
-        require(actions.isNotEmpty()) { "模型没有返回可识别的安全步骤" }
-        require(actions.none { it.risk == RiskLevel.FORBIDDEN }) { "计划包含永久禁止的操作" }
-        return TaskPlan(
-            goal = goal.take(MAX_GOAL),
-            title = root.optString("title", "新任务").take(MAX_TEXT),
-            summary = root.optString("summary").take(MAX_TEXT),
-            actions = actions,
-            stopCondition = root.optString(
-                "stopCondition",
-                "目标完成、用户取消或出现无法安全处理的错误"
-            ).take(MAX_TEXT)
-        )
     }
 
     private fun extractJson(raw: String): String {

@@ -18,7 +18,13 @@ try {
 }
 $Project = Join-Path $Root "android-app"
 $DefaultJava = "C:\Program Files (x86)\Android\openjdk\jdk-17.0.14"
-$DefaultSdk = "C:\Program Files (x86)\Android\android-sdk"
+$ProjectSdk = Join-Path $Root ".tools\android-sdk"
+$SystemSdk = "C:\Program Files (x86)\Android\android-sdk"
+$DefaultSdk = if (Test-Path (Join-Path $ProjectSdk "platforms\android-36\android.jar")) {
+    $ProjectSdk
+} else {
+    $SystemSdk
+}
 
 if (-not $env:JAVA_HOME) {
     $env:JAVA_HOME = $DefaultJava
@@ -32,15 +38,18 @@ $env:GRADLE_USER_HOME = Join-Path $Root ".tools\gradle-home"
 if (-not (Test-Path (Join-Path $env:JAVA_HOME "bin\java.exe"))) {
     throw "JDK 17 was not found. Set JAVA_HOME."
 }
-if (-not (Test-Path (Join-Path $env:ANDROID_HOME "platforms\android-35\android.jar"))) {
-    throw "Android Platform 35 was not found. Set ANDROID_HOME."
+if (-not (Test-Path (Join-Path $env:ANDROID_HOME "platforms\android-36\android.jar"))) {
+    throw "Android Platform 36 was not found. Set ANDROID_HOME."
 }
 
-$Gradle = Get-ChildItem (Join-Path $Root ".tools") -Directory -Filter "gradle-*" -ErrorAction SilentlyContinue |
-    Sort-Object Name -Descending |
-    ForEach-Object { Join-Path $_.FullName "bin\gradle.bat" } |
-    Where-Object { Test-Path $_ } |
-    Select-Object -First 1
+$Gradle = Join-Path $Project "gradlew.bat"
+if (-not (Test-Path $Gradle)) {
+    $Gradle = Get-ChildItem (Join-Path $Root ".tools") -Directory -Filter "gradle-*" -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        ForEach-Object { Join-Path $_.FullName "bin\gradle.bat" } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+}
 
 if (-not $Gradle) {
     $GradleCommand = Get-Command gradle.bat -ErrorAction SilentlyContinue

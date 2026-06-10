@@ -84,4 +84,56 @@ class PlanParserTest {
             )
         }
     }
+
+    @Test
+    fun rejectsMixedSafeAndUnknownTools() {
+        assertThrows(IllegalArgumentException::class.java) {
+            parser.parse(
+                "先检查再运行未知程序",
+                """
+                    {
+                      "actions": [
+                        {"tool": "inspect_task", "arguments": {}},
+                        {"tool": "download_and_execute", "arguments": {}}
+                      ]
+                    }
+                """.trimIndent()
+            )
+        }
+    }
+
+    @Test
+    fun rejectsPlansOverStepLimit() {
+        val actions = (1..9).joinToString(",") {
+            """{"tool":"inspect_task","arguments":{}}"""
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            parser.parse("太多步骤", """{"actions":[$actions]}""")
+        }
+    }
+
+    @Test
+    fun rejectsMalformedAction() {
+        assertThrows(IllegalArgumentException::class.java) {
+            parser.parse("错误格式", """{"actions":["not-an-object"]}""")
+        }
+    }
+
+    @Test
+    fun parsesJsonCodeFence() {
+        val plan = parser.parse(
+            "检查任务",
+            """
+                ```json
+                {
+                  "actions": [
+                    {"tool": "inspect_task", "arguments": {}, "risk": "READ_ONLY"}
+                  ]
+                }
+                ```
+            """.trimIndent()
+        )
+
+        assertEquals("inspect_task", plan.actions.single().tool)
+    }
 }

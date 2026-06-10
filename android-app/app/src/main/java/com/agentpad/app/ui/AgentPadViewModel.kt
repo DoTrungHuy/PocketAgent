@@ -20,6 +20,7 @@ import com.agentpad.app.domain.TaskRecord
 import com.agentpad.app.domain.TaskStatus
 import com.agentpad.app.domain.ToolResult
 import com.agentpad.app.policy.ApprovalPolicy
+import com.agentpad.app.policy.ApprovalTokenPolicy
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +64,7 @@ data class AgentPadUiState(
 class AgentPadViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as AgentPadApplication
     private val policy: ApprovalPolicy = app.approvalPolicy
+    private val tokenPolicy = ApprovalTokenPolicy(policy)
     private val _uiState = MutableStateFlow(
         AgentPadUiState(apiKeyConfigured = app.secureApiKeyStore.hasKey())
     )
@@ -248,29 +250,27 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
 
     fun approveTask() {
         val plan = _uiState.value.currentPlan ?: return
-        val token = ApprovalToken(
-            taskId = plan.id,
-            actionId = null,
-            argumentDigest = taskApprovalDigest(plan),
-            scope = ApprovalScope.TASK,
-            expiresAt = System.currentTimeMillis() + APPROVAL_TTL_MILLIS,
-            remainingUses = 1
+        val token = tokenPolicy.createTaskToken(
+            plan = plan,
+            now = System.currentTimeMillis(),
+            ttlMillis = APPROVAL_TTL_MILLIS
         )
         _uiState.update {
-            it.copy(approvalTokens = it.approvalTokens + (taskTokenKey(plan.id) to token), error = null)
+            it.copy(
+                approvalTokens = it.approvalTokens + (tokenPolicy.taskTokenKey(plan.id) to token),
+                error = null
+            )
         }
     }
 
     fun approveAction(actionId: String) {
         val plan = _uiState.value.currentPlan ?: return
         val action = plan.actions.firstOrNull { it.id == actionId } ?: return
-        val token = ApprovalToken(
-            taskId = plan.id,
-            actionId = action.id,
-            argumentDigest = policy.argumentDigest(action),
-            scope = ApprovalScope.ACTION,
-            expiresAt = System.currentTimeMillis() + APPROVAL_TTL_MILLIS,
-            remainingUses = 1
+        val token = tokenPolicy.createActionToken(
+            plan = plan,
+            action = action,
+            now = System.currentTimeMillis(),
+            ttlMillis = APPROVAL_TTL_MILLIS
         )
         _uiState.update {
             it.copy(approvalTokens = it.approvalTokens + (action.id to token), error = null)
@@ -305,6 +305,7 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             }
             return
         }
+        consumeApprovals(state, plan)
         viewModelScope.launch {
             setBusy(true, TaskStatus.RUNNING)
             app.repository.updateStatus(plan, TaskStatus.RUNNING)
@@ -334,12 +335,8 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         plan.actions.map { it.id to policy.requiredScope(it) }
 
     fun isTaskApproved(state: AgentPadUiState, plan: TaskPlan): Boolean {
-        val token = state.approvalTokens[taskTokenKey(plan.id)] ?: return false
-        return token.taskId == plan.id &&
-            token.scope == ApprovalScope.TASK &&
-            token.argumentDigest == taskApprovalDigest(plan) &&
-            token.expiresAt >= System.currentTimeMillis() &&
-            token.remainingUses > 0
+        val token = state.approvalTokens[tokenPolicy.taskTokenKey(plan.id)]
+        return tokenPolicy.isTaskValid(token, plan, System.currentTimeMillis())
     }
 
     fun isActionApproved(
@@ -348,13 +345,12 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         actionId: String
     ): Boolean {
         val action = plan.actions.firstOrNull { it.id == actionId } ?: return false
-        val token = state.approvalTokens[actionId] ?: return false
-        return token.taskId == plan.id &&
-            token.actionId == action.id &&
-            token.scope == ApprovalScope.ACTION &&
-            token.argumentDigest == policy.argumentDigest(action) &&
-            token.expiresAt >= System.currentTimeMillis() &&
-            token.remainingUses > 0
+        return tokenPolicy.isActionValid(
+            state.approvalTokens[actionId],
+            plan,
+            action,
+            System.currentTimeMillis()
+        )
     }
 
     private suspend fun executeActions(plan: TaskPlan): String {
@@ -419,12 +415,17 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-    private fun taskApprovalDigest(plan: TaskPlan): String =
+    private fun consumeApprovals(state: AgentPadUiState, plan: TaskPlan) {
+        val consumed = state.approvalTokens.toMutableMap()
+        val taskKey = tokenPolicy.taskTokenKey(plan.id)
+        consumed[taskKey]?.let { consumed[taskKey] = tokenPolicy.consume(it) }
         plan.actions
-            .filter { policy.requiredScope(it) == ApprovalScope.TASK }
-            .joinToString("|") { policy.argumentDigest(it) }
-
-    private fun taskTokenKey(taskId: String): String = "task:$taskId"
+            .filter { policy.requiredScope(it) == ApprovalScope.ACTION }
+            .forEach { action ->
+                consumed[action.id]?.let { consumed[action.id] = tokenPolicy.consume(it) }
+            }
+        _uiState.update { it.copy(approvalTokens = consumed) }
+    }
 
     private fun requireDocument(): SelectedDocument =
         _uiState.value.selectedDocument ?: error("计划需要文件，但用户尚未选择")
