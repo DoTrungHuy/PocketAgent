@@ -6,10 +6,10 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -95,7 +95,34 @@ jobs:
               sha256: $sha256
             }' > release/update-manifest.json
 
-      - name: Publish GitHub Release
+      - name: Upload signed release bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: AgentPad-${{ github.ref_name }}-release
+          path: release/
+          if-no-files-found: error
+
+      - name: Remove temporary release key
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/agentpad-release.jks"
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v6
+
+      - name: Download signed release bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: AgentPad-${{ github.ref_name }}-release
+          path: release
+
+      - name: Publish GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -104,7 +131,3 @@ jobs:
             --notes-file "docs/releases/${GITHUB_REF_NAME}.md" \
             --prerelease \
             --verify-tag
-
-      - name: Remove temporary release key
-        if: always()
-        run: rm -f "${RUNNER_TEMP}/agentpad-release.jks"

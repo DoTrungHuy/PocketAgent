@@ -20,10 +20,12 @@ backups, and keep the recovery credentials separately.
 
 1. Ensure `main` CI is green.
 2. Confirm `versionName` equals the intended tag without the leading `v`.
-3. Create and push an annotated tag, for example `v0.2.0-alpha.1`.
-4. The Release workflow tests, lints, signs, verifies, creates the CycloneDX
-   SBOM, and publishes all assets.
-5. Download the APK and verify its SHA256 and signing certificate before
+3. Create and push an annotated tag, for example `v0.2.1-alpha.1`.
+4. The read-only build job tests, lints, signs, verifies, creates the CycloneDX
+   SBOM, and uploads a temporary release bundle.
+5. A separate publish job receives `contents: write` and creates the GitHub
+   pre-release from that verified bundle.
+6. Download the APK and verify its SHA256 and signing certificate before
    installing it on test devices.
 
 The workflow publishes prereleases only. Stable release promotion is a separate

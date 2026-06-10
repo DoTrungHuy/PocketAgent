@@ -1,6 +1,7 @@
 package com.agentpad.app.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -10,6 +11,17 @@ import kotlinx.coroutines.flow.map
 
 private val Context.agentPadDataStore by preferencesDataStore(name = "agentpad_settings")
 
+enum class ThemePreference {
+    LIGHT,
+    DARK
+}
+
+data class AppPreferences(
+    val providerSettings: ProviderSettings = ProviderSettings(),
+    val theme: ThemePreference = ThemePreference.LIGHT,
+    val privacyMode: Boolean = false
+)
+
 class SettingsStore(private val context: Context) {
     private object Keys {
         val providerId = stringPreferencesKey("provider_id")
@@ -17,19 +29,29 @@ class SettingsStore(private val context: Context) {
         val model = stringPreferencesKey("model")
         val visionEndpoint = stringPreferencesKey("vision_endpoint")
         val visionModel = stringPreferencesKey("vision_model")
+        val theme = stringPreferencesKey("theme")
+        val privacyMode = booleanPreferencesKey("privacy_mode")
     }
 
-    val providerSettings: Flow<ProviderSettings> = context.agentPadDataStore.data.map { values ->
-        ProviderSettings(
-            providerId = values[Keys.providerId] ?: "deepseek",
-            endpoint = values[Keys.endpoint] ?: "https://api.deepseek.com/chat/completions",
-            model = values[Keys.model] ?: "",
-            visionEndpoint = values[Keys.visionEndpoint] ?: "",
-            visionModel = values[Keys.visionModel] ?: ""
+    val preferences: Flow<AppPreferences> = context.agentPadDataStore.data.map { values ->
+        AppPreferences(
+            providerSettings = ProviderSettings(
+                providerId = values[Keys.providerId] ?: "deepseek",
+                endpoint = values[Keys.endpoint] ?: "https://api.deepseek.com/chat/completions",
+                model = values[Keys.model] ?: "",
+                visionEndpoint = values[Keys.visionEndpoint] ?: "",
+                visionModel = values[Keys.visionModel] ?: ""
+            ),
+            theme = runCatching {
+                ThemePreference.valueOf(values[Keys.theme] ?: ThemePreference.LIGHT.name)
+            }.getOrDefault(ThemePreference.LIGHT),
+            privacyMode = values[Keys.privacyMode] ?: false
         )
     }
 
-    suspend fun save(settings: ProviderSettings) {
+    val providerSettings: Flow<ProviderSettings> = preferences.map { it.providerSettings }
+
+    suspend fun saveProvider(settings: ProviderSettings) {
         context.agentPadDataStore.edit { values ->
             values[Keys.providerId] = settings.providerId.trim()
             values[Keys.endpoint] = settings.endpoint.trim()
@@ -39,13 +61,15 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setTheme(theme: ThemePreference) {
+        context.agentPadDataStore.edit { it[Keys.theme] = theme.name }
+    }
+
+    suspend fun setPrivacyMode(enabled: Boolean) {
+        context.agentPadDataStore.edit { it[Keys.privacyMode] = enabled }
+    }
+
     suspend fun clear() {
-        context.agentPadDataStore.edit { values ->
-            values.remove(Keys.providerId)
-            values.remove(Keys.endpoint)
-            values.remove(Keys.model)
-            values.remove(Keys.visionEndpoint)
-            values.remove(Keys.visionModel)
-        }
+        context.agentPadDataStore.edit { it.clear() }
     }
 }

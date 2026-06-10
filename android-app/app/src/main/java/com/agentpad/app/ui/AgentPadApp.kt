@@ -1,17 +1,12 @@
 package com.agentpad.app.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,22 +26,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PendingActions
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.StopCircle
-import androidx.compose.material.icons.rounded.TaskAlt
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,434 +49,634 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.agentpad.app.BuildConfig
+import com.agentpad.app.data.ThemePreference
+import com.agentpad.app.domain.AgentThread
 import com.agentpad.app.domain.ApprovalScope
 import com.agentpad.app.domain.CapabilityDescriptor
 import com.agentpad.app.domain.CapabilityState
-import com.agentpad.app.domain.PlannedAction
-import com.agentpad.app.domain.ProviderSettings
+import com.agentpad.app.domain.MessageKind
 import com.agentpad.app.domain.RiskLevel
 import com.agentpad.app.domain.TaskPlan
-import com.agentpad.app.domain.TaskRecord
-import com.agentpad.app.domain.TaskStatus
+import com.agentpad.app.domain.ThreadMessage
+import com.agentpad.app.domain.TurnStatus
+import com.agentpad.app.ui.theme.AgentPadTheme
 import com.agentpad.app.ui.theme.Danger
-import com.agentpad.app.ui.theme.ElectricCyan
-import com.agentpad.app.ui.theme.Graphite
-import com.agentpad.app.ui.theme.GraphiteRaised
-import com.agentpad.app.ui.theme.GraphiteSoft
-import com.agentpad.app.ui.theme.Mist
-import com.agentpad.app.ui.theme.Steel
 import com.agentpad.app.ui.theme.Success
 import com.agentpad.app.ui.theme.Warning
 import java.text.DateFormat
 import java.util.Date
 
-private data class NavigationDestination(
-    val section: AppSection,
-    val label: String,
-    val icon: ImageVector
-)
-
-private val destinations = listOf(
-    NavigationDestination(AppSection.TASKS, "任务", Icons.Rounded.AutoAwesome),
-    NavigationDestination(AppSection.APPROVALS, "审批", Icons.Rounded.PendingActions),
-    NavigationDestination(AppSection.CAPABILITIES, "能力", Icons.Rounded.Memory),
-    NavigationDestination(AppSection.SETTINGS, "设置", Icons.Rounded.Settings)
+private val compactSections = listOf(
+    AppSection.THREAD to "线程",
+    AppSection.PLAN to "计划",
+    AppSection.APPROVALS to "审批",
+    AppSection.SETTINGS to "设置"
 )
 
 @Composable
 fun AgentPadRoot(
     viewModel: AgentPadViewModel,
-    onChooseDocument: () -> Unit
+    onChooseDocument: () -> Unit,
+    onPrivacyModeChanged: (Boolean) -> Unit,
+    onExportDiagnostics: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val recentTasks by viewModel.recentTasks.collectAsStateWithLifecycle()
+    val threads by viewModel.threads.collectAsStateWithLifecycle()
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Graphite)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-    ) {
-        val tablet = maxWidth >= 840.dp
-        if (tablet) {
-            Row(Modifier.fillMaxSize()) {
-                AgentPadNavigationRail(state.section, viewModel::setSection)
-                Workspace(
-                    state = state,
-                    recentTasks = recentTasks,
-                    capabilities = viewModel.capabilities,
-                    tablet = true,
-                    viewModel = viewModel,
-                    onChooseDocument = onChooseDocument,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        } else {
-            Scaffold(
-                containerColor = Graphite,
-                contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                bottomBar = {
-                    AgentPadBottomBar(state.section, viewModel::setSection)
-                }
-            ) { padding ->
-                Workspace(
-                    state = state,
-                    recentTasks = recentTasks,
-                    capabilities = viewModel.capabilities,
-                    tablet = false,
-                    viewModel = viewModel,
-                    onChooseDocument = onChooseDocument,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                )
-            }
-        }
+    LaunchedEffect(state.privacyMode) {
+        onPrivacyModeChanged(state.privacyMode)
     }
-}
 
-@Composable
-private fun Workspace(
-    state: AgentPadUiState,
-    recentTasks: List<TaskRecord>,
-    capabilities: List<CapabilityDescriptor>,
-    tablet: Boolean,
-    viewModel: AgentPadViewModel,
-    onChooseDocument: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0x1824D8C7), Color.Transparent),
-                    center = Offset(100f, 40f),
-                    radius = 900f
-                )
-            )
-    ) {
-        TopStatusBar(state)
-        AnimatedContent(
-            targetState = state.section,
-            label = "workspace-section",
-            modifier = Modifier.weight(1f)
-        ) { section ->
-            when (section) {
-                AppSection.TASKS -> TasksScreen(
-                    state,
-                    recentTasks,
-                    tablet,
-                    viewModel,
-                    onChooseDocument
-                )
-                AppSection.APPROVALS -> ApprovalsScreen(state, viewModel)
-                AppSection.CAPABILITIES -> CapabilitiesScreen(capabilities, state.apiKeyConfigured)
-                AppSection.SETTINGS -> SettingsScreen(state, viewModel)
-            }
-        }
-    }
-}
-
-@Composable
-private fun TopStatusBar(state: AgentPadUiState) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(ElectricCyan),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Rounded.AutoAwesome, null, tint = Graphite)
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("AgentPad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                "Native Core · ${statusLabel(state.status)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = Steel
-            )
-        }
-        StatusPill(
-            text = if (state.apiKeyConfigured) "模型已连接" else "等待配置",
-            color = if (state.apiKeyConfigured) Success else Warning
-        )
-    }
-}
-
-@Composable
-private fun AgentPadNavigationRail(
-    current: AppSection,
-    onSelect: (AppSection) -> Unit
-) {
-    NavigationRail(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(92.dp),
-        containerColor = Color(0xFF080B0E),
-        header = {
-            Spacer(Modifier.height(16.dp))
-        }
-    ) {
-        destinations.forEach { destination ->
-            NavigationRailItem(
-                selected = current == destination.section,
-                onClick = { onSelect(destination.section) },
-                icon = { Icon(destination.icon, destination.label) },
-                label = { Text(destination.label) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun AgentPadBottomBar(
-    current: AppSection,
-    onSelect: (AppSection) -> Unit
-) {
-    NavigationBar(
-        containerColor = Color(0xFF080B0E),
-        windowInsets = WindowInsets.navigationBars
-    ) {
-        destinations.forEach { destination ->
-            NavigationBarItem(
-                selected = current == destination.section,
-                onClick = { onSelect(destination.section) },
-                icon = { Icon(destination.icon, destination.label) },
-                label = { Text(destination.label) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun TasksScreen(
-    state: AgentPadUiState,
-    recentTasks: List<TaskRecord>,
-    tablet: Boolean,
-    viewModel: AgentPadViewModel,
-    onChooseDocument: () -> Unit
-) {
-    if (tablet) {
-        Row(
+    AgentPadTheme(darkTheme = state.theme == ThemePreference.DARK) {
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
-            LazyColumn(
-                modifier = Modifier.weight(0.92f),
-                contentPadding = PaddingValues(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item { MissionComposer(state, viewModel, onChooseDocument) }
-                item { RecentTasks(recentTasks) }
+            LaunchedEffect(state.section, maxWidth) {
+                viewModel.recordUiContext(state.section, maxWidth.value.toInt())
             }
-            LazyColumn(
-                modifier = Modifier.weight(1.08f),
-                contentPadding = PaddingValues(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item { PlanPanel(state, viewModel) }
-                state.result?.let { result -> item { ResultPanel(result) } }
+            when {
+                maxWidth < 600.dp -> CompactLayout(
+                    state,
+                    threads,
+                    viewModel,
+                    onChooseDocument,
+                    onExportDiagnostics
+                )
+                maxWidth < 1000.dp -> MediumLayout(
+                    state,
+                    threads,
+                    viewModel,
+                    onChooseDocument,
+                    onExportDiagnostics
+                )
+                else -> ExpandedLayout(
+                    state,
+                    threads,
+                    viewModel,
+                    onChooseDocument,
+                    onExportDiagnostics
+                )
             }
         }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item { MissionComposer(state, viewModel, onChooseDocument) }
-            item { PlanPanel(state, viewModel) }
-            state.result?.let { result -> item { ResultPanel(result) } }
-            item { RecentTasks(recentTasks) }
-            item { Spacer(Modifier.height(18.dp)) }
+    }
+
+    if (state.compressionRequired) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCompression,
+            title = { Text("线程上下文较长") },
+            text = {
+                Text("继续前需要生成上下文检查点。原始消息会完整保留，后续请求将使用摘要和检查点后的消息。")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmCompressionAndCreatePlan) {
+                    Text("确认压缩并继续")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCompression) { Text("取消") }
+            }
+        )
+    }
+    if (state.deleteConfirmationThreadId != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDeleteThread,
+            title = { Text("删除线程？") },
+            text = { Text("将删除该线程的消息、计划、结果、附件授权和审计记录。此操作不可撤销。") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDeleteThread) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDeleteThread) { Text("取消") }
+            }
+        )
+    }
+    if (
+        state.crashReportAvailable &&
+        !state.compressionRequired &&
+        state.deleteConfirmationThreadId == null
+    ) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCrashReport,
+            title = { Text("检测到上次异常") },
+            text = {
+                Text(
+                    "AgentPad 保存了一份仅位于本机的脱敏崩溃报告。" +
+                        "报告不包含 API Key、文件原文或完整模型输出。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onExportDiagnostics) {
+                    Text("导出诊断文件")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCrashReport) {
+                    Text("忽略并删除")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CompactLayout(
+    state: AgentPadUiState,
+    threads: List<AgentThread>,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
+    onExportDiagnostics: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { WorkspaceHeader(state) },
+        bottomBar = {
+            NavigationBar(windowInsets = WindowInsets.navigationBars) {
+                compactSections.forEach { (section, label) ->
+                    NavigationBarItem(
+                        selected = state.section == section,
+                        onClick = { viewModel.setSection(section) },
+                        icon = { Icon(sectionIcon(section), label) },
+                        label = { Text(label) }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            SectionContent(
+                state,
+                threads,
+                viewModel,
+                onChooseDocument,
+                onExportDiagnostics,
+                showThreadPicker = true
+            )
         }
     }
 }
 
 @Composable
-private fun MissionComposer(
+private fun MediumLayout(
+    state: AgentPadUiState,
+    threads: List<AgentThread>,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
+    onExportDiagnostics: () -> Unit
+) {
+    Row(Modifier.fillMaxSize()) {
+        ThreadSidebar(threads, state.selectedThreadId, viewModel, Modifier.width(250.dp))
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            WorkspaceHeader(state)
+            SectionContent(
+                state,
+                threads,
+                viewModel,
+                onChooseDocument,
+                onExportDiagnostics,
+                showThreadPicker = false
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandedLayout(
+    state: AgentPadUiState,
+    threads: List<AgentThread>,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
+    onExportDiagnostics: () -> Unit
+) {
+    Row(Modifier.fillMaxSize()) {
+        ThreadSidebar(threads, state.selectedThreadId, viewModel, Modifier.width(280.dp))
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            WorkspaceHeader(state)
+            if (state.section == AppSection.THREAD) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    ThreadPage(state, viewModel, onChooseDocument, Modifier.weight(1.2f))
+                    VerticalDivider(
+                        modifier = Modifier.fillMaxHeight().width(1.dp),
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    InspectorPage(state, viewModel, Modifier.weight(0.8f))
+                }
+            } else {
+                SectionContent(
+                    state,
+                    threads,
+                    viewModel,
+                    onChooseDocument,
+                    onExportDiagnostics,
+                    showThreadPicker = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceHeader(state: AgentPadUiState) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("AgentPad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    state.snapshot?.thread?.title ?: "新任务",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            ModelBadge(state)
+        }
+    }
+}
+
+@Composable
+private fun ModelBadge(state: AgentPadUiState) {
+    val provider = when (state.providerSettings.providerId) {
+        "deepseek" -> "DeepSeek"
+        "custom" -> "自定义"
+        else -> state.providerSettings.providerId.ifBlank { "未配置" }
+    }
+    AssistChip(
+        onClick = {},
+        enabled = false,
+        label = {
+            Text(
+                if (state.apiKeyConfigured) "$provider · ${state.providerSettings.model}" else "模型未配置",
+                maxLines = 1
+            )
+        }
+    )
+}
+
+@Composable
+private fun ThreadSidebar(
+    threads: List<AgentThread>,
+    selectedId: String?,
+    viewModel: AgentPadViewModel,
+    modifier: Modifier
+) {
+    Surface(modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.fillMaxSize().padding(14.dp)) {
+            Button(onClick = viewModel::newThread, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Add, null)
+                Spacer(Modifier.width(8.dp))
+                Text("新建任务")
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("任务线程", fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(threads, key = { it.id }) { thread ->
+                    ThreadRow(
+                        thread = thread,
+                        selected = thread.id == selectedId,
+                        onOpen = { viewModel.openThread(thread.id) },
+                        onDelete = { viewModel.requestDeleteThread(thread.id) }
+                    )
+                }
+            }
+            HorizontalDivider()
+            SidebarDestination("计划", AppSection.PLAN, viewModel)
+            SidebarDestination("审批", AppSection.APPROVALS, viewModel)
+            SidebarDestination("能力", AppSection.CAPABILITIES, viewModel)
+            SidebarDestination("设置", AppSection.SETTINGS, viewModel)
+        }
+    }
+}
+
+@Composable
+private fun ThreadRow(
+    thread: AgentThread,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(thread.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                        .format(Date(thread.updatedAt)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Rounded.Delete, "删除线程", modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SidebarDestination(label: String, section: AppSection, viewModel: AgentPadViewModel) {
+    TextButton(onClick = { viewModel.setSection(section) }, modifier = Modifier.fillMaxWidth()) {
+        Icon(sectionIcon(section), null)
+        Spacer(Modifier.width(8.dp))
+        Text(label, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SectionContent(
+    state: AgentPadUiState,
+    threads: List<AgentThread>,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
+    onExportDiagnostics: () -> Unit,
+    showThreadPicker: Boolean
+) {
+    when (state.section) {
+        AppSection.THREAD -> ThreadPage(
+            state,
+            viewModel,
+            onChooseDocument,
+            Modifier.fillMaxSize(),
+            if (showThreadPicker) threads else emptyList()
+        )
+        AppSection.PLAN -> PlanPage(state, viewModel, Modifier.fillMaxSize())
+        AppSection.APPROVALS -> ApprovalsPage(state, viewModel, Modifier.fillMaxSize())
+        AppSection.CAPABILITIES -> CapabilitiesPage(viewModel.capabilities, state.apiKeyConfigured)
+        AppSection.SETTINGS -> SettingsPage(state, viewModel, onExportDiagnostics)
+    }
+}
+
+@Composable
+private fun ThreadPage(
+    state: AgentPadUiState,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
+    modifier: Modifier,
+    compactThreads: List<AgentThread> = emptyList()
+) {
+    LazyColumn(
+        modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (compactThreads.isNotEmpty()) {
+            item {
+                OutlinedButton(onClick = viewModel::newThread) {
+                    Icon(Icons.Rounded.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("新建任务")
+                }
+            }
+            items(compactThreads.take(5), key = { "compact-${it.id}" }) { thread ->
+                if (state.selectedThreadId == null || thread.id != state.selectedThreadId) {
+                    ThreadRow(
+                        thread,
+                        false,
+                        onOpen = { viewModel.openThread(thread.id) },
+                        onDelete = { viewModel.requestDeleteThread(thread.id) }
+                    )
+                }
+            }
+        }
+        val messages = state.snapshot?.messages.orEmpty()
+        if (messages.isEmpty()) {
+            item {
+                EmptyPanel(
+                    "开始一个任务线程",
+                    "输入目标后，AgentPad 会生成计划，等待审批，再执行并记录结果。"
+                )
+            }
+        } else {
+            items(messages, key = { it.id }) { message -> MessageCard(message) }
+        }
+        item {
+            Composer(state, viewModel, onChooseDocument)
+        }
+        state.resultNotice?.let { notice ->
+            item { NoticeCard(notice, Success) }
+        }
+        state.error?.let { error ->
+            item { NoticeCard(error, MaterialTheme.colorScheme.error) }
+        }
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun MessageCard(message: ThreadMessage) {
+    val label = when (message.kind) {
+        MessageKind.GOAL -> "你"
+        MessageKind.PLAN -> "计划"
+        MessageKind.RESULT -> "结果"
+        MessageKind.STATUS -> "状态"
+        MessageKind.CONTEXT_SUMMARY -> "上下文检查点"
+    }
+    Panel(
+        colors = if (message.kind == MessageKind.GOAL) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        }
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(message.content)
+    }
+}
+
+@Composable
+private fun Composer(
     state: AgentPadUiState,
     viewModel: AgentPadViewModel,
     onChooseDocument: () -> Unit
 ) {
-    AgentCard(
-        modifier = Modifier.fillMaxWidth(),
-        colors = listOf(Color(0xFF132229), Color(0xFF10161C))
-    ) {
-        Text("下一项任务", style = MaterialTheme.typography.labelLarge, color = ElectricCyan)
-        Spacer(Modifier.height(8.dp))
+    Panel {
         Text(
-            "告诉 Agent 目标，先审阅计划，再允许它行动。",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold
+            if (state.selectedThreadId == null) "新任务" else "继续这个线程",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(10.dp))
         OutlinedTextField(
-            value = state.goal,
-            onValueChange = viewModel::setGoal,
+            value = state.draftGoal,
+            onValueChange = viewModel::setDraftGoal,
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
-            maxLines = 7,
-            label = { Text("任务目标") },
-            placeholder = { Text("例如：读取我选择的报告，提炼风险和下一步行动。") }
+            maxLines = 8,
+            label = { Text("告诉 AgentPad 要完成什么") },
+            placeholder = { Text("例如：读取这份报告，找出主要风险并给出下一步建议") }
         )
-        Spacer(Modifier.height(12.dp))
-        if (state.selectedDocument == null) {
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onChooseDocument) {
-                Icon(Icons.Rounded.FolderOpen, null)
-                Spacer(Modifier.width(8.dp))
-                Text("选择文本文件")
+                Icon(Icons.Rounded.AttachFile, null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (state.selectedDocument == null) "添加文件" else "更换文件")
             }
-        } else {
-            SelectedDocumentRow(
-                state = state,
-                onReplace = onChooseDocument,
-                onRemove = viewModel::clearDocument
-            )
+            state.selectedDocument?.let { document ->
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    document.name,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                TextButton(onClick = viewModel::clearDocument) { Text("移除") }
+            } ?: Spacer(Modifier.weight(1f))
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
         Button(
             onClick = viewModel::createPlan,
-            enabled = !state.busy && state.apiKeyConfigured && state.goal.isNotBlank(),
+            enabled = !state.busy && state.draftGoal.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (state.busy && state.status == TaskStatus.PLANNING) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = Graphite
-                )
+            if (state.busy) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             } else {
                 Icon(Icons.Rounded.AutoAwesome, null)
             }
             Spacer(Modifier.width(8.dp))
-            Text(if (state.apiKeyConfigured) "生成可审批计划" else "先配置模型")
-        }
-        AnimatedVisibility(state.error != null) {
-            Text(
-                text = state.error.orEmpty(),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 12.dp)
-            )
+            Text("生成计划")
         }
     }
 }
 
 @Composable
-private fun SelectedDocumentRow(
+private fun InspectorPage(
     state: AgentPadUiState,
-    onReplace: () -> Unit,
-    onRemove: () -> Unit
+    viewModel: AgentPadViewModel,
+    modifier: Modifier
 ) {
-    val document = state.selectedDocument ?: return
-    Surface(
-        color = Color(0xFF0B1217),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth()
+    LazyColumn(
+        modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Rounded.Description, null, tint = ElectricCyan)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(document.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    document.size?.let { "${it / 1024} KB · 内容尚未读取" } ?: "内容尚未读取",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Steel
-                )
+        item { PlanPanel(state, viewModel) }
+        item { ApprovalPanel(state, viewModel) }
+        state.currentTurn?.result?.let { result ->
+            item {
+                Panel {
+                    Text("输出", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(result)
+                }
             }
-            TextButton(onClick = onReplace) { Text("更换") }
-            TextButton(onClick = onRemove) { Text("移除") }
         }
+    }
+}
+
+@Composable
+private fun PlanPage(state: AgentPadUiState, viewModel: AgentPadViewModel, modifier: Modifier) {
+    LazyColumn(
+        modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { PlanPanel(state, viewModel) }
+        state.currentTurn?.result?.let { item { NoticeCard(it, Success) } }
     }
 }
 
 @Composable
 private fun PlanPanel(state: AgentPadUiState, viewModel: AgentPadViewModel) {
     val plan = state.currentPlan
-    AgentCard(Modifier.fillMaxWidth()) {
+    Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.PendingActions, null, tint = ElectricCyan)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("任务计划", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    plan?.summary ?: "生成计划后，这里会显示步骤、风险和审批状态。",
-                    color = Steel,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
+            Icon(Icons.Rounded.Description, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Text("当前计划", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            state.currentTurn?.let { StatusBadge(it.status) }
         }
+        Spacer(Modifier.height(10.dp))
         if (plan == null) {
-            Spacer(Modifier.height(28.dp))
-            EmptyOrbit()
-        } else {
-            Spacer(Modifier.height(16.dp))
-            plan.actions.forEachIndexed { index, action ->
-                TimelineAction(
-                    number = index + 1,
-                    action = action,
-                    approved = when (
-                        viewModel.approvalsFor(plan).firstOrNull { it.first == action.id }?.second
-                    ) {
-                        ApprovalScope.NONE -> true
-                        ApprovalScope.TASK -> viewModel.isTaskApproved(state, plan)
-                        ApprovalScope.ACTION -> viewModel.isActionApproved(state, plan, action.id)
-                        null -> false
-                    }
+            Text("当前线程还没有可执行计划。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (
+                state.currentTurn?.status in setOf(
+                    TurnStatus.PLANNING,
+                    TurnStatus.INTERRUPTED
                 )
-                if (index != plan.actions.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 17.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                    )
+            ) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = viewModel::cancelTurn,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.StopCircle, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("取消当前回合")
                 }
             }
-            Spacer(Modifier.height(18.dp))
+        } else {
+            Text(plan.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(12.dp))
+            plan.actions.forEachIndexed { index, action ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            "${index + 1}",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(action.title, fontWeight = FontWeight.Bold)
+                        Text(action.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(action.tool, style = MaterialTheme.typography.labelSmall)
+                    }
+                    RiskBadge(action.risk)
+                }
+                if (index != plan.actions.lastIndex) HorizontalDivider()
+            }
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
-                    onClick = viewModel::cancelTask,
-                    enabled = !state.busy,
+                    onClick = viewModel::cancelTurn,
+                    enabled = state.currentTurn?.status !in setOf(
+                        TurnStatus.COMPLETED,
+                        TurnStatus.FAILED,
+                        TurnStatus.CANCELLED,
+                        TurnStatus.SUPERSEDED
+                    ),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Rounded.StopCircle, null)
@@ -490,328 +685,241 @@ private fun PlanPanel(state: AgentPadUiState, viewModel: AgentPadViewModel) {
                 }
                 Button(
                     onClick = viewModel::executePlan,
-                    enabled = !state.busy && state.status != TaskStatus.COMPLETED,
+                    enabled = !state.busy &&
+                        state.currentTurn?.status !in setOf(
+                            TurnStatus.COMPLETED,
+                            TurnStatus.CANCELLED,
+                            TurnStatus.SUPERSEDED
+                        ),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Rounded.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (state.busy) "执行中" else "检查审批并执行")
+                    Text("执行")
                 }
             }
-            if (state.busy) {
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
         }
     }
 }
 
 @Composable
-private fun TimelineAction(number: Int, action: PlannedAction, approved: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(if (approved) Success.copy(alpha = 0.18f) else GraphiteSoft)
-                .border(
-                    1.dp,
-                    if (approved) Success else MaterialTheme.colorScheme.outline,
-                    CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                number.toString(),
-                color = if (approved) Success else Mist,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(action.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                RiskBadge(action.risk)
-            }
-            if (action.description.isNotBlank()) {
-                Text(
-                    action.description,
-                    color = Steel,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            Text(
-                action.tool,
-                color = ElectricCyan,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(top = 5.dp)
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ApprovalsScreen(state: AgentPadUiState, viewModel: AgentPadViewModel) {
-    val plan = state.currentPlan
+private fun ApprovalsPage(state: AgentPadUiState, viewModel: AgentPadViewModel, modifier: Modifier) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            SectionHeading(
-                "审批中心",
-                "每项敏感操作都说明原因和影响。模型不能降低本地风险级别。"
-            )
-        }
-        if (plan == null) {
-            item {
-                EmptyState(
-                    title = "暂时没有待审批任务",
-                    body = "在任务页生成计划后，需要批准的步骤会出现在这里。"
-                )
-            }
-        } else {
-            val scopes = viewModel.approvalsFor(plan).toMap()
-            val taskActions = plan.actions.filter { scopes[it.id] == ApprovalScope.TASK }
-            if (taskActions.isNotEmpty()) {
-                item {
-                    ApprovalCard(
-                        title = "批准当前任务的普通外部操作",
-                        description = taskActions.joinToString("、") { it.title },
-                        risk = RiskLevel.TASK_APPROVAL,
-                        approved = viewModel.isTaskApproved(state, plan),
-                        onApprove = viewModel::approveTask
-                    )
-                }
-            }
-            items(plan.actions.filter { scopes[it.id] == ApprovalScope.ACTION }) { action ->
-                ApprovalCard(
-                    title = action.title,
-                    description = action.description.ifBlank { "该操作会影响应用外部或发送数据。" },
-                    risk = action.risk,
-                    approved = viewModel.isActionApproved(state, plan, action.id),
-                    onApprove = { viewModel.approveAction(action.id) }
-                )
-            }
-            item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(
-                        onClick = {},
-                        label = { Text("计划：${plan.actions.size} 步") },
-                        leadingIcon = { Icon(Icons.Rounded.TaskAlt, null) }
-                    )
-                    AssistChip(
-                        onClick = {},
-                        label = { Text("上限：${plan.maxSteps} 步") },
-                        leadingIcon = { Icon(Icons.Rounded.Security, null) }
-                    )
-                }
-            }
-        }
-        item { Spacer(Modifier.height(24.dp)) }
+        item { ApprovalPanel(state, viewModel) }
+        state.error?.let { item { NoticeCard(it, MaterialTheme.colorScheme.error) } }
     }
 }
 
 @Composable
-private fun ApprovalCard(
+private fun ApprovalPanel(state: AgentPadUiState, viewModel: AgentPadViewModel) {
+    val plan = state.currentPlan
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Security, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Text("审批", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(10.dp))
+        if (plan == null) {
+            Text("没有待审批计划。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@Panel
+        }
+        val scopes = viewModel.approvalsFor(plan).toMap()
+        val taskActions = plan.actions.filter { scopes[it.id] == ApprovalScope.TASK }
+        if (taskActions.isNotEmpty()) {
+            ApprovalRow(
+                title = "允许当前任务的普通外部操作",
+                description = taskActions.joinToString("、") { it.title },
+                approved = viewModel.isTaskApproved(state, plan),
+                onApprove = viewModel::approveTask
+            )
+        }
+        plan.actions.filter { scopes[it.id] == ApprovalScope.ACTION }.forEach { action ->
+            ApprovalRow(
+                title = action.title,
+                description = action.description,
+                approved = viewModel.isActionApproved(state, plan, action.id),
+                onApprove = { viewModel.approveAction(action.id) }
+            )
+        }
+        if (taskActions.isEmpty() && plan.actions.none { scopes[it.id] == ApprovalScope.ACTION }) {
+            Text("该计划仅包含只读操作，无需额外批准。")
+        }
+    }
+}
+
+@Composable
+private fun ApprovalRow(
     title: String,
     description: String,
-    risk: RiskLevel,
     approved: Boolean,
     onApprove: () -> Unit
 ) {
-    AgentCard(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                if (approved) Icons.Rounded.CheckCircle else Icons.Rounded.Security,
-                null,
-                tint = if (approved) Success else riskColor(risk)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(description, color = Steel, style = MaterialTheme.typography.bodySmall)
-            }
-            if (approved) {
-                StatusPill("已批准", Success)
-            } else {
-                FilledTonalButton(onClick = onApprove) { Text("批准本项") }
-            }
+    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (approved) Icons.Rounded.CheckCircle else Icons.Rounded.PendingActions,
+            null,
+            tint = if (approved) Success else Warning
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (approved) {
+            Text("已允许", color = Success)
+        } else {
+            FilledTonalButton(onClick = onApprove) { Text("允许本次") }
         }
     }
 }
 
 @Composable
-private fun CapabilitiesScreen(
+private fun CapabilitiesPage(
     capabilities: List<CapabilityDescriptor>,
     apiKeyConfigured: Boolean
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            SectionHeading(
-                "能力中心",
-                "这里只展示真实可用状态。未实现或未授权的能力不会伪装成已完成。"
-            )
-        }
-        items(capabilities) { capability ->
-            val effective = if (capability.id == "model" && apiKeyConfigured) {
-                capability.copy(state = CapabilityState.AVAILABLE)
+        item { PageHeading("能力", "这里只展示真实可用或明确规划中的能力。") }
+        items(capabilities, key = { it.id }) { capability ->
+            val state = if (capability.id == "model" && apiKeyConfigured) {
+                CapabilityState.AVAILABLE
             } else {
-                capability
+                capability.state
             }
-            AgentCard(Modifier.fillMaxWidth()) {
+            Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(stateColor(effective.state).copy(alpha = 0.13f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (effective.id == "runtime") Icons.Rounded.Memory else Icons.Rounded.Tune,
-                            null,
-                            tint = stateColor(effective.state)
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
+                    Icon(Icons.Rounded.Memory, null, tint = stateColor(state))
+                    Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(effective.name, fontWeight = FontWeight.Bold)
-                        Text(effective.description, color = Steel, style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            effective.enableHint,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+                        Text(capability.name, fontWeight = FontWeight.Bold)
+                        Text(capability.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(capability.enableHint, style = MaterialTheme.typography.labelSmall)
                     }
-                    StatusPill(stateLabel(effective.state), stateColor(effective.state))
+                    Text(stateLabel(state), color = stateColor(state))
                 }
             }
         }
-        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
 @Composable
-private fun SettingsScreen(state: AgentPadUiState, viewModel: AgentPadViewModel) {
+private fun SettingsPage(
+    state: AgentPadUiState,
+    viewModel: AgentPadViewModel,
+    onExportDiagnostics: () -> Unit
+) {
     val settings = state.providerSettings
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item { PageHeading("设置", "模型配置只有在连接测试成功后才会保存。") }
         item {
-            SectionHeading(
-                "模型与隐私",
-                "API Key 使用 Android Keystore 加密，不写入任务数据库和普通设置。"
-            )
+            Panel {
+                Text("1. 服务商", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = viewModel::selectDeepSeek, modifier = Modifier.weight(1f)) {
+                        Text("DeepSeek")
+                    }
+                    OutlinedButton(onClick = viewModel::selectCustomProvider, modifier = Modifier.weight(1f)) {
+                        Text("自定义")
+                    }
+                }
+            }
         }
         item {
-            AgentCard(Modifier.fillMaxWidth()) {
-                Text("文字规划模型", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(14.dp))
-                OutlinedTextField(
-                    value = settings.providerId,
-                    onValueChange = {
-                        viewModel.setProviderSettings(settings.copy(providerId = it))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("服务商标识") },
-                    singleLine = true
-                )
+            Panel {
+                Text("2. 模型与接口", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = settings.endpoint,
-                    onValueChange = {
-                        viewModel.setProviderSettings(settings.copy(endpoint = it))
-                    },
+                    onValueChange = { viewModel.setProviderSettings(settings.copy(endpoint = it)) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Chat Completions HTTPS 地址") },
+                    label = { Text("HTTPS 接口地址") },
                     singleLine = true
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = settings.model,
-                    onValueChange = {
-                        viewModel.setProviderSettings(settings.copy(model = it))
-                    },
+                    onValueChange = { viewModel.setProviderSettings(settings.copy(model = it)) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("模型名称") },
-                    placeholder = { Text("以服务商控制台当前可用名称为准") },
                     singleLine = true
                 )
+            }
+        }
+        item {
+            Panel {
+                Text("3. API Key 与连接测试", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = state.apiKeyDraft,
                     onValueChange = viewModel::setApiKeyDraft,
                     modifier = Modifier.fillMaxWidth(),
                     label = {
-                        Text(if (state.apiKeyConfigured) "API Key（留空则保持不变）" else "API Key")
+                        Text(if (state.apiKeyConfigured) "API Key（留空保持不变）" else "API Key")
                     },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
                 )
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = viewModel::saveProviderSettings,
-                        enabled = !state.busy,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("加密保存")
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::testProvider,
-                        enabled = !state.busy && state.apiKeyConfigured,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("测试连接")
-                    }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = viewModel::testAndSaveProvider,
+                    enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("测试连接并保存")
+                }
+                state.resultNotice?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = Success)
                 }
                 state.error?.let {
-                    Text(
-                        it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
-                }
-                state.result?.let {
-                    Text(
-                        it,
-                        color = Success,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
         item {
-            AgentCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Security, null, tint = ElectricCyan)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("阶段一隐私默认值", fontWeight = FontWeight.Bold)
-                        Text(
-                            "不申请全盘文件权限；文件内容只在动作级审批后读取和上传。",
-                            color = Steel,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+            Panel {
+                Text("外观与隐私", fontWeight = FontWeight.Bold)
+                SettingSwitchRow(
+                    "深色主题",
+                    state.theme == ThemePreference.DARK,
+                    onChange = {
+                        viewModel.setTheme(if (it) ThemePreference.DARK else ThemePreference.LIGHT)
                     }
+                )
+                SettingSwitchRow(
+                    "隐私模式",
+                    state.privacyMode,
+                    "开启后系统截图和录屏会显示黑屏。",
+                    viewModel::setPrivacyMode
+                )
+            }
+        }
+        item {
+            Panel {
+                Text("版本与诊断", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                Text("构建 ${BuildConfig.GIT_SHA} · ${BuildConfig.BUILD_CHANNEL}")
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = onExportDiagnostics, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Download, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("导出本地诊断")
                 }
             }
         }
@@ -820,190 +928,134 @@ private fun SettingsScreen(state: AgentPadUiState, viewModel: AgentPadViewModel)
 }
 
 @Composable
-private fun RecentTasks(tasks: List<TaskRecord>) {
-    AgentCard(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.History, null, tint = ElectricCyan)
-            Spacer(Modifier.width(10.dp))
-            Text("最近任务", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(12.dp))
-        if (tasks.isEmpty()) {
-            Text("完成第一项任务后，执行记录会出现在这里。", color = Steel)
-        } else {
-            tasks.take(6).forEachIndexed { index, task ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(statusColor(task.status))
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(task.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-                                .format(Date(task.updatedAt)),
-                            color = Steel,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                    Text(statusLabel(task.status), color = statusColor(task.status))
-                }
-                if (index != minOf(tasks.size, 6) - 1) HorizontalDivider(color = GraphiteSoft)
+private fun SettingSwitchRow(
+    title: String,
+    checked: Boolean,
+    description: String? = null,
+    onChange: (Boolean) -> Unit
+) {
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            description?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
 @Composable
-private fun ResultPanel(result: String) {
-    AgentCard(Modifier.fillMaxWidth(), colors = listOf(Color(0xFF11241F), Color(0xFF101A18))) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.CheckCircle, null, tint = Success)
-            Spacer(Modifier.width(10.dp))
-            Text("任务结果", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(result, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@Composable
-private fun EmptyOrbit() {
-    val alpha by animateFloatAsState(targetValue = 0.7f, label = "orbit-alpha")
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(150.dp)
-            .drawBehind {
-                drawCircle(ElectricCyan.copy(alpha = 0.08f * alpha), radius = size.minDimension * 0.42f)
-                drawCircle(
-                    ElectricCyan.copy(alpha = 0.24f * alpha),
-                    radius = size.minDimension * 0.25f,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Rounded.AutoAwesome, null, tint = ElectricCyan, modifier = Modifier.size(34.dp))
-            Spacer(Modifier.height(8.dp))
-            Text("等待任务", color = Steel)
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(title: String, body: String) {
-    AgentCard(Modifier.fillMaxWidth()) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text(body, color = Steel)
-    }
-}
-
-@Composable
-private fun SectionHeading(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(5.dp))
-        Text(subtitle, color = Steel, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun AgentCard(
+private fun Panel(
     modifier: Modifier = Modifier,
-    colors: List<Color> = listOf(GraphiteRaised, Color(0xFF0E1419)),
+    colors: androidx.compose.material3.CardColors = CardDefaults.cardColors(),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        modifier = modifier.fillMaxWidth(),
+        colors = colors,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .background(Brush.linearGradient(colors))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f), RoundedCornerShape(22.dp))
-                .padding(18.dp),
-            content = content
-        )
+        Column(Modifier.padding(16.dp), content = content)
     }
 }
 
 @Composable
-private fun StatusPill(text: String, color: Color) {
-    Surface(color = color.copy(alpha = 0.13f), shape = RoundedCornerShape(100.dp)) {
-        Text(
-            text,
-            color = color,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-        )
+private fun EmptyPanel(title: String, body: String) {
+    Panel {
+        Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(10.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun NoticeCard(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.5f))
+    ) {
+        Text(text, color = color, modifier = Modifier.padding(12.dp))
+    }
+}
+
+@Composable
+private fun PageHeading(title: String, subtitle: String) {
+    Column {
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun RiskBadge(risk: RiskLevel) {
-    StatusPill(
-        text = when (risk) {
+    val color = when (risk) {
+        RiskLevel.READ_ONLY -> Success
+        RiskLevel.TASK_APPROVAL -> MaterialTheme.colorScheme.primary
+        RiskLevel.ACTION_APPROVAL -> Warning
+        RiskLevel.FORBIDDEN -> Danger
+    }
+    Text(
+        when (risk) {
             RiskLevel.READ_ONLY -> "只读"
-            RiskLevel.TASK_APPROVAL -> "任务批准"
-            RiskLevel.ACTION_APPROVAL -> "逐项批准"
+            RiskLevel.TASK_APPROVAL -> "任务审批"
+            RiskLevel.ACTION_APPROVAL -> "逐项审批"
             RiskLevel.FORBIDDEN -> "禁止"
         },
-        color = riskColor(risk)
+        color = color,
+        style = MaterialTheme.typography.labelSmall
     )
 }
 
-private fun riskColor(risk: RiskLevel): Color = when (risk) {
-    RiskLevel.READ_ONLY -> Success
-    RiskLevel.TASK_APPROVAL -> ElectricCyan
-    RiskLevel.ACTION_APPROVAL -> Warning
-    RiskLevel.FORBIDDEN -> Danger
+@Composable
+private fun StatusBadge(status: TurnStatus) {
+    val color = when (status) {
+        TurnStatus.COMPLETED -> Success
+        TurnStatus.FAILED -> Danger
+        TurnStatus.AWAITING_APPROVAL -> Warning
+        TurnStatus.INTERRUPTED -> Warning
+        TurnStatus.SUPERSEDED, TurnStatus.CANCELLED -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Text(statusLabel(status), color = color, style = MaterialTheme.typography.labelMedium)
 }
 
-private fun stateColor(state: CapabilityState): Color = when (state) {
+private fun sectionIcon(section: AppSection) = when (section) {
+    AppSection.THREAD -> Icons.Rounded.AutoAwesome
+    AppSection.PLAN -> Icons.Rounded.Description
+    AppSection.APPROVALS -> Icons.Rounded.PendingActions
+    AppSection.CAPABILITIES -> Icons.Rounded.Memory
+    AppSection.SETTINGS -> Icons.Rounded.Settings
+}
+
+private fun statusLabel(status: TurnStatus) = when (status) {
+    TurnStatus.DRAFT -> "草稿"
+    TurnStatus.PLANNING -> "计划中"
+    TurnStatus.AWAITING_APPROVAL -> "待审批"
+    TurnStatus.RUNNING -> "执行中"
+    TurnStatus.VERIFYING -> "验证中"
+    TurnStatus.COMPLETED -> "已完成"
+    TurnStatus.FAILED -> "失败"
+    TurnStatus.CANCELLED -> "已取消"
+    TurnStatus.INTERRUPTED -> "已中断"
+    TurnStatus.SUPERSEDED -> "已作废"
+}
+
+private fun stateColor(state: CapabilityState) = when (state) {
     CapabilityState.AVAILABLE -> Success
-    CapabilityState.NEEDS_CONFIGURATION -> Warning
-    CapabilityState.NEEDS_PERMISSION -> Warning
-    CapabilityState.PLANNED -> ElectricCyan
+    CapabilityState.NEEDS_CONFIGURATION, CapabilityState.NEEDS_PERMISSION -> Warning
+    CapabilityState.PLANNED -> Color(0xFF2563EB)
     CapabilityState.UNAVAILABLE -> Danger
 }
 
-private fun stateLabel(state: CapabilityState): String = when (state) {
+private fun stateLabel(state: CapabilityState) = when (state) {
     CapabilityState.AVAILABLE -> "可用"
     CapabilityState.NEEDS_CONFIGURATION -> "待配置"
     CapabilityState.NEEDS_PERMISSION -> "待授权"
     CapabilityState.PLANNED -> "规划中"
     CapabilityState.UNAVAILABLE -> "不可用"
-}
-
-private fun statusColor(status: TaskStatus): Color = when (status) {
-    TaskStatus.COMPLETED -> Success
-    TaskStatus.FAILED -> Danger
-    TaskStatus.CANCELLED -> Steel
-    TaskStatus.AWAITING_APPROVAL -> Warning
-    TaskStatus.RUNNING, TaskStatus.PLANNING, TaskStatus.VERIFYING -> ElectricCyan
-    TaskStatus.DRAFT -> Steel
-}
-
-private fun statusLabel(status: TaskStatus): String = when (status) {
-    TaskStatus.DRAFT -> "待命"
-    TaskStatus.PLANNING -> "计划中"
-    TaskStatus.AWAITING_APPROVAL -> "待审批"
-    TaskStatus.RUNNING -> "执行中"
-    TaskStatus.VERIFYING -> "验证中"
-    TaskStatus.COMPLETED -> "已完成"
-    TaskStatus.FAILED -> "失败"
-    TaskStatus.CANCELLED -> "已取消"
 }
