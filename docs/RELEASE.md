@@ -19,6 +19,9 @@ backups, and keep the recovery credentials separately.
 ## Publishing
 
 1. Ensure `main` CI is green.
+   Run the manual `Android Instrumentation` workflow when hosted-emulator
+   diagnostics are needed; signed alpha acceptance is performed on the target
+   tablets and ARM64 phone.
 2. Confirm `versionName` equals the intended tag without the leading `v`.
 3. Create and push an annotated tag, for example `v0.2.1-alpha.1`.
 4. The read-only build job tests, lints, signs, verifies, creates the CycloneDX
