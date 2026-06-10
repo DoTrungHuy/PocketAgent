@@ -18,9 +18,14 @@ local.properties
 *.iml
 *.jks
 *.keystore
+*.p12
+release-secrets.*
 
 # Android build products
 android-app/.gradle/
 android-app/**/build/
 android-app/captures/
 android-app/.kotlin/
+
+# Release staging
+release/
