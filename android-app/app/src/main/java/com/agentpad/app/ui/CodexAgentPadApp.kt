@@ -189,21 +189,21 @@ private fun CodexMain(state: AgentPadUiState, tablet: Boolean, viewModel: AgentP
 private fun ThreadScreen(state: AgentPadUiState, tablet: Boolean, viewModel: AgentPadViewModel, onChooseDocument: () -> Unit) {
     if (tablet) {
         Row(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            ThreadColumn(state, viewModel, onChooseDocument, Modifier.weight(1.15f))
-            InspectorColumn(state, viewModel, Modifier.weight(0.85f))
+            ThreadColumn(state, viewModel, onChooseDocument, Modifier.weight(1.15f), fillPanel = true)
+            InspectorColumn(state, viewModel, Modifier.weight(0.85f).fillMaxHeight())
         }
     } else {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { ThreadColumn(state, viewModel, onChooseDocument, Modifier.fillMaxWidth()) }
+            item { ThreadColumn(state, viewModel, onChooseDocument, Modifier.fillMaxWidth(), fillPanel = false) }
             item { InspectorColumn(state, viewModel, Modifier.fillMaxWidth()) }
         }
     }
 }
 
 @Composable
-private fun ThreadColumn(state: AgentPadUiState, viewModel: AgentPadViewModel, onChooseDocument: () -> Unit, modifier: Modifier) {
-    Column(modifier.fillMaxHeight()) {
-        CardPanel(Modifier.weight(1f)) {
+private fun ThreadColumn(state: AgentPadUiState, viewModel: AgentPadViewModel, onChooseDocument: () -> Unit, modifier: Modifier, fillPanel: Boolean) {
+    Column(modifier) {
+        CardPanel(if (fillPanel) Modifier.weight(1f) else Modifier.fillMaxWidth().height(280.dp)) {
             Text("Thread", color = Steel, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
             Bubble(state.goal.ifBlank { "告诉 AgentPad 一个目标，它会先生成计划。" }, muted = true)
@@ -242,7 +242,7 @@ private fun ComposerPanel(state: AgentPadUiState, viewModel: AgentPadViewModel, 
 
 @Composable
 private fun InspectorColumn(state: AgentPadUiState, viewModel: AgentPadViewModel, modifier: Modifier) {
-    LazyColumn(modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { PlanPanel(state, viewModel) }
         item { OutputPanel(state.result) }
     }
