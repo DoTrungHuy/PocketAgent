@@ -73,7 +73,9 @@ jobs:
           name="AgentPad-${GITHUB_REF_NAME}.apk"
           mkdir -p release
           cp android-app/app/build/outputs/apk/release/app-release.apk "release/${name}"
-          apksigner verify --verbose --print-certs "release/${name}" | tee release/SIGNING_CERTIFICATE.txt
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" \
+            verify --verbose --print-certs "release/${name}" \
+            | tee release/SIGNING_CERTIFICATE.txt
           sha256sum "release/${name}" | tee "release/${name}.sha256"
           cp android-app/build/reports/cyclonedx/bom.json "release/AgentPad-${GITHUB_REF_NAME}-sbom.cdx.json"
           cp LICENSE THIRD_PARTY_NOTICES.md release/
