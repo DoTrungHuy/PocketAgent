@@ -56,8 +56,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -70,7 +68,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -113,13 +110,30 @@ fun AgentPadRoot(viewModel: AgentPadViewModel, onChooseDocument: () -> Unit) {
     val recentTasks by viewModel.recentTasks.collectAsStateWithLifecycle()
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(Graphite).windowInsetsPadding(WindowInsets.safeDrawing)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Graphite)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         val tablet = maxWidth >= 840.dp
         if (tablet) {
             Row(Modifier.fillMaxSize()) {
-                AgentPadNavigationRail(state.section, viewModel::setSection)
-                Workspace(state, recentTasks, viewModel.capabilities, true, viewModel, onChooseDocument, Modifier.weight(1f))
+                CodexSidebar(
+                    state = state,
+                    recentTasks = recentTasks,
+                    current = state.section,
+                    onSelect = viewModel::setSection,
+                    onSetup = { viewModel.setSection(AppSection.SETTINGS) }
+                )
+                Workspace(
+                    state = state,
+                    recentTasks = recentTasks,
+                    capabilities = viewModel.capabilities,
+                    tablet = true,
+                    viewModel = viewModel,
+                    onChooseDocument = onChooseDocument,
+                    modifier = Modifier.weight(1f)
+                )
             }
         } else {
             Scaffold(
@@ -128,15 +142,100 @@ fun AgentPadRoot(viewModel: AgentPadViewModel, onChooseDocument: () -> Unit) {
                 bottomBar = { AgentPadBottomBar(state.section, viewModel::setSection) }
             ) { padding ->
                 Workspace(
-                    state,
-                    recentTasks,
-                    viewModel.capabilities,
-                    false,
-                    viewModel,
-                    onChooseDocument,
-                    Modifier.fillMaxSize().padding(padding)
+                    state = state,
+                    recentTasks = recentTasks,
+                    capabilities = viewModel.capabilities,
+                    tablet = false,
+                    viewModel = viewModel,
+                    onChooseDocument = onChooseDocument,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CodexSidebar(
+    state: AgentPadUiState,
+    recentTasks: List<TaskRecord>,
+    current: AppSection,
+    onSelect: (AppSection) -> Unit,
+    onSetup: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(278.dp)
+            .fillMaxHeight()
+            .background(Color(0xFF0D1014))
+            .border(1.dp, Color(0xFF303842))
+            .padding(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ElectricCyan),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = Graphite)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("AgentPad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Codex-style workspace", color = Steel, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        if (state.apiKeyConfigured) StatusPill("模型已连接", Success) else Button(onClick = onSetup, modifier = Modifier.fillMaxWidth()) { Text("配置模型") }
+        Spacer(Modifier.height(22.dp))
+        destinations.forEach { destination ->
+            SidebarItem(destination, selected = current == destination.section, onClick = { onSelect(destination.section) })
+        }
+        Spacer(Modifier.height(22.dp))
+        Text("Recent", color = Steel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
+        if (recentTasks.isEmpty()) {
+            Text("还没有任务记录", color = Steel, style = MaterialTheme.typography.bodySmall)
+        } else {
+            recentTasks.take(5).forEach { task ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(statusColor(task.status)))
+                    Spacer(Modifier.width(9.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(task.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                        Text(statusLabel(task.status), color = Steel, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SidebarItem(destination: NavigationDestination, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) Color(0xFF23313A) else Color.Transparent
+    val fg = if (selected) ElectricCyan else Mist
+    Surface(
+        onClick = onClick,
+        color = bg,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(destination.icon, destination.label, tint = fg)
+            Spacer(Modifier.width(12.dp))
+            Text(destination.label, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
         }
     }
 }
@@ -152,13 +251,9 @@ private fun Workspace(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.background(
-            Brush.radialGradient(
-                colors = listOf(Color(0x142DEAD6), Color.Transparent),
-                center = Offset(100f, 40f),
-                radius = 900f
-            )
-        )
+        modifier = modifier
+            .background(Graphite)
+            .padding(horizontal = if (tablet) 24.dp else 0.dp)
     ) {
         TopStatusBar(state, onSetup = { viewModel.setSection(AppSection.SETTINGS) })
         AnimatedContent(targetState = state.section, label = "workspace-section", modifier = Modifier.weight(1f)) { section ->
@@ -181,36 +276,29 @@ private fun Workspace(
 @Composable
 private fun TopStatusBar(state: AgentPadUiState, onSetup: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(ElectricCyan), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.AutoAwesome, null, tint = Graphite)
-        }
-        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("AgentPad", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Android AI Agent Workspace · ${statusLabel(state.status)}", style = MaterialTheme.typography.labelMedium, color = Steel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Workspace", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("Android AI Agent · ${statusLabel(state.status)}", style = MaterialTheme.typography.labelMedium, color = Steel, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (state.apiKeyConfigured) StatusPill("模型已连接", Success) else OutlinedButton(onClick = onSetup) { Text("配置模型") }
     }
 }
 
 @Composable
-private fun AgentPadNavigationRail(current: AppSection, onSelect: (AppSection) -> Unit) {
-    NavigationRail(modifier = Modifier.fillMaxHeight().width(92.dp), containerColor = Color(0xFF05070A)) {
-        Spacer(Modifier.height(16.dp))
-        destinations.forEach { destination ->
-            NavigationRailItem(selected = current == destination.section, onClick = { onSelect(destination.section) }, icon = { Icon(destination.icon, destination.label) }, label = { Text(destination.label) })
-        }
-    }
-}
-
-@Composable
 private fun AgentPadBottomBar(current: AppSection, onSelect: (AppSection) -> Unit) {
-    NavigationBar(containerColor = Color(0xFF05070A), windowInsets = WindowInsets.navigationBars) {
+    NavigationBar(containerColor = Color(0xFF0D1014), windowInsets = WindowInsets.navigationBars) {
         destinations.forEach { destination ->
-            NavigationBarItem(selected = current == destination.section, onClick = { onSelect(destination.section) }, icon = { Icon(destination.icon, destination.label) }, label = { Text(destination.label) })
+            NavigationBarItem(
+                selected = current == destination.section,
+                onClick = { onSelect(destination.section) },
+                icon = { Icon(destination.icon, destination.label) },
+                label = { Text(destination.label) }
+            )
         }
     }
 }
@@ -219,7 +307,7 @@ private fun AgentPadBottomBar(current: AppSection, onSelect: (AppSection) -> Uni
 private fun WelcomeSetupScreen(onStart: () -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            AgentCard(Modifier.fillMaxWidth(), colors = listOf(Color(0xFF101A20), Color(0xFF090D11))) {
+            AgentCard(Modifier.fillMaxWidth()) {
                 Text("AgentPad", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Text("让 Android 设备成为安全可控的 AI Agent 工作台。", color = Steel)
@@ -249,12 +337,12 @@ private fun SetupStep(number: String, title: String, body: String) {
 @Composable
 private fun TasksScreen(state: AgentPadUiState, recentTasks: List<TaskRecord>, tablet: Boolean, viewModel: AgentPadViewModel, onChooseDocument: () -> Unit) {
     if (tablet) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            LazyColumn(modifier = Modifier.weight(0.92f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(modifier = Modifier.fillMaxSize().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            LazyColumn(modifier = Modifier.weight(0.95f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { CommandCenter(state, viewModel, onChooseDocument) }
                 item { RecentTasks(recentTasks) }
             }
-            LazyColumn(modifier = Modifier.weight(1.08f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LazyColumn(modifier = Modifier.weight(1.05f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { PlanPanel(state, viewModel) }
                 state.result?.let { result -> item { ResultPanel(result) } }
             }
@@ -272,12 +360,12 @@ private fun TasksScreen(state: AgentPadUiState, recentTasks: List<TaskRecord>, t
 
 @Composable
 private fun CommandCenter(state: AgentPadUiState, viewModel: AgentPadViewModel, onChooseDocument: () -> Unit) {
-    AgentCard(Modifier.fillMaxWidth(), colors = listOf(Color(0xFF101A20), Color(0xFF0B0F13))) {
-        Text("Command Center", style = MaterialTheme.typography.labelLarge, color = ElectricCyan)
+    AgentCard(Modifier.fillMaxWidth()) {
+        Text("Command Center", style = MaterialTheme.typography.labelLarge, color = ElectricCyan, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("描述一个目标，让 Agent 先计划、再审批、后执行。", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text("输入目标，Agent 先生成计划，再等待你审批。", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(value = state.goal, onValueChange = viewModel::setGoal, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7, label = { Text("任务目标") }, placeholder = { Text("例如：总结这个文件并给出下一步行动") })
+        OutlinedTextField(value = state.goal, onValueChange = viewModel::setGoal, modifier = Modifier.fillMaxWidth(), minLines = 4, maxLines = 8, label = { Text("任务目标") }, placeholder = { Text("例如：总结这个文件并给出下一步行动") })
         Spacer(Modifier.height(12.dp))
         if (state.selectedDocument == null) {
             OutlinedButton(onClick = onChooseDocument) {
@@ -301,7 +389,7 @@ private fun CommandCenter(state: AgentPadUiState, viewModel: AgentPadViewModel, 
 @Composable
 private fun SelectedDocumentRow(state: AgentPadUiState, onReplace: () -> Unit, onRemove: () -> Unit) {
     val document = state.selectedDocument ?: return
-    Surface(color = Color(0xFF0B1217), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = Color(0xFF26303A), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Description, null, tint = ElectricCyan)
             Spacer(Modifier.width(10.dp))
@@ -339,7 +427,7 @@ private fun PlanPanel(state: AgentPadUiState, viewModel: AgentPadViewModel) {
                     ApprovalScope.ACTION -> viewModel.isActionApproved(state, plan, action.id)
                     null -> false
                 })
-                if (index != plan.actions.lastIndex) HorizontalDivider(modifier = Modifier.padding(start = 17.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                if (index != plan.actions.lastIndex) HorizontalDivider(modifier = Modifier.padding(start = 17.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -365,7 +453,7 @@ private fun PlanPanel(state: AgentPadUiState, viewModel: AgentPadViewModel) {
 @Composable
 private fun TimelineAction(number: Int, action: PlannedAction, approved: Boolean) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
-        Box(modifier = Modifier.size(34.dp).clip(CircleShape).background(if (approved) Success.copy(alpha = 0.18f) else GraphiteSoft).border(1.dp, if (approved) Success else MaterialTheme.colorScheme.outline, CircleShape), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(34.dp).clip(CircleShape).background(if (approved) Success.copy(alpha = 0.24f) else GraphiteSoft).border(1.dp, if (approved) Success else MaterialTheme.colorScheme.outline, CircleShape), contentAlignment = Alignment.Center) {
             Text(number.toString(), color = if (approved) Success else Mist, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(12.dp))
@@ -432,7 +520,7 @@ private fun CapabilitiesScreen(capabilities: List<CapabilityDescriptor>, apiKeyC
             val effective = if (capability.id == "model" && apiKeyConfigured) capability.copy(state = CapabilityState.AVAILABLE) else capability
             AgentCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(stateColor(effective.state).copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(stateColor(effective.state).copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
                         Icon(if (effective.id == "runtime") Icons.Rounded.Memory else Icons.Rounded.Tune, null, tint = stateColor(effective.state))
                     }
                     Spacer(Modifier.width(14.dp))
@@ -526,14 +614,14 @@ private fun RecentTasks(tasks: List<TaskRecord>) {
 
 @Composable
 private fun ResultPanel(result: String) {
-    AgentCard(Modifier.fillMaxWidth(), colors = listOf(Color(0xFF10211D), Color(0xFF0E1513))) {
+    AgentCard(Modifier.fillMaxWidth(), colors = listOf(Color(0xFF263C35), Color(0xFF202A27))) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.CheckCircle, null, tint = Success)
             Spacer(Modifier.width(10.dp))
             Text("任务结果", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(12.dp))
-        Text(result, style = MaterialTheme.typography.bodyLarge)
+        Text(result, style = MaterialTheme.typography.bodyLarge, color = Mist)
     }
 }
 
@@ -541,8 +629,8 @@ private fun ResultPanel(result: String) {
 private fun EmptyOrbit() {
     val alpha by animateFloatAsState(targetValue = 0.7f, label = "orbit-alpha")
     Box(modifier = Modifier.fillMaxWidth().height(150.dp).drawBehind {
-        drawCircle(ElectricCyan.copy(alpha = 0.07f * alpha), radius = size.minDimension * 0.42f)
-        drawCircle(ElectricCyan.copy(alpha = 0.22f * alpha), radius = size.minDimension * 0.25f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+        drawCircle(ElectricCyan.copy(alpha = 0.12f * alpha), radius = size.minDimension * 0.42f)
+        drawCircle(ElectricCyan.copy(alpha = 0.32f * alpha), radius = size.minDimension * 0.25f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
     }, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = ElectricCyan, modifier = Modifier.size(34.dp))
@@ -571,15 +659,15 @@ private fun SectionHeading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun AgentCard(modifier: Modifier = Modifier, colors: List<Color> = listOf(GraphiteRaised, Color(0xFF0B1014)), content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier, shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
-        Column(modifier = Modifier.background(Brush.linearGradient(colors)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.52f), RoundedCornerShape(22.dp)).padding(18.dp), content = content)
+private fun AgentCard(modifier: Modifier = Modifier, colors: List<Color> = listOf(GraphiteRaised, Color(0xFF20252B)), content: @Composable ColumnScope.() -> Unit) {
+    Card(modifier = modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
+        Column(modifier = Modifier.background(Brush.linearGradient(colors)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.82f), RoundedCornerShape(18.dp)).padding(18.dp), content = content)
     }
 }
 
 @Composable
 private fun StatusPill(text: String, color: Color) {
-    Surface(color = color.copy(alpha = 0.13f), shape = RoundedCornerShape(100.dp)) {
+    Surface(color = color.copy(alpha = 0.18f), shape = RoundedCornerShape(100.dp), border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.55f))) {
         Text(text, color = color, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
     }
 }
