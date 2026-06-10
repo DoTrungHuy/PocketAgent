@@ -23,3 +23,4 @@ if ($LASTEXITCODE -ne 1) {
 }
 
 Write-Host "No tracked release keys or high-confidence token patterns detected."
+exit 0
