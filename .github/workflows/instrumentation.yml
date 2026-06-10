@@ -1,0 +1,57 @@
+name: Android Instrumentation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  instrumentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: android-app/**/*.gradle*
+
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Android SDK 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Run migration and Compose tests
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            cd android-app && chmod +x gradlew
+            cd android-app && ./gradlew --no-daemon connectedDebugAndroidTest || {
+              adb logcat -d > app/build/reports/instrumentation-logcat.txt
+              exit 1
+            }
+
+      - name: Upload instrumentation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: agentpad-instrumentation-reports
+          if-no-files-found: ignore
+          path: |
+            android-app/app/build/reports/androidTests/
+            android-app/app/build/outputs/androidTest-results/
+            android-app/app/build/reports/instrumentation-logcat.txt

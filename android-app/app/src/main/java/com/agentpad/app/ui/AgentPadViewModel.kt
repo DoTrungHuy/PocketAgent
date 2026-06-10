@@ -1,7 +1,7 @@
 package com.agentpad.app.ui
 
 import android.app.Application
-import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
@@ -9,6 +9,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.agentpad.app.AgentPadApplication
+import com.agentpad.app.data.ThemePreference
+import com.agentpad.app.domain.AgentThread
+import com.agentpad.app.domain.AgentTurn
 import com.agentpad.app.domain.ApprovalScope
 import com.agentpad.app.domain.ApprovalToken
 import com.agentpad.app.domain.CapabilityDescriptor
@@ -16,24 +19,31 @@ import com.agentpad.app.domain.CapabilityState
 import com.agentpad.app.domain.ProviderSettings
 import com.agentpad.app.domain.RiskLevel
 import com.agentpad.app.domain.TaskPlan
-import com.agentpad.app.domain.TaskRecord
-import com.agentpad.app.domain.TaskStatus
+import com.agentpad.app.domain.ThreadAttachment
+import com.agentpad.app.domain.ThreadMessage
+import com.agentpad.app.domain.ThreadSnapshot
 import com.agentpad.app.domain.ToolResult
+import com.agentpad.app.domain.TurnStatus
 import com.agentpad.app.policy.ApprovalPolicy
 import com.agentpad.app.policy.ApprovalTokenPolicy
+import com.agentpad.app.provider.ThreadContextPolicy
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class AppSection {
-    TASKS,
+    THREAD,
+    PLAN,
     APPROVALS,
     CAPABILITIES,
     SETTINGS
@@ -44,42 +54,68 @@ data class SelectedDocument(
     val name: String,
     val mimeType: String,
     val size: Long?
-)
+) {
+    fun toAttachment() = ThreadAttachment(
+        threadId = "",
+        turnId = null,
+        uri = uri.toString(),
+        name = name,
+        mimeType = mimeType,
+        size = size
+    )
+}
 
 data class AgentPadUiState(
-    val section: AppSection = AppSection.TASKS,
-    val goal: String = "",
+    val section: AppSection = AppSection.THREAD,
+    val selectedThreadId: String? = null,
+    val snapshot: ThreadSnapshot? = null,
+    val draftGoal: String = "",
     val selectedDocument: SelectedDocument? = null,
     val providerSettings: ProviderSettings = ProviderSettings(),
     val apiKeyConfigured: Boolean = false,
     val apiKeyDraft: String = "",
-    val currentPlan: TaskPlan? = null,
     val approvalTokens: Map<String, ApprovalToken> = emptyMap(),
-    val status: TaskStatus = TaskStatus.DRAFT,
-    val result: String? = null,
+    val theme: ThemePreference = ThemePreference.LIGHT,
+    val privacyMode: Boolean = false,
+    val crashReportAvailable: Boolean = false,
+    val compressionRequired: Boolean = false,
+    val deleteConfirmationThreadId: String? = null,
+    val resultNotice: String? = null,
     val error: String? = null,
     val busy: Boolean = false
-)
+) {
+    val currentTurn: AgentTurn?
+        get() = snapshot?.turns?.lastOrNull { it.status != TurnStatus.SUPERSEDED }
+            ?: snapshot?.turns?.lastOrNull()
+
+    val currentPlan: TaskPlan?
+        get() = currentTurn?.plan
+}
 
 class AgentPadViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as AgentPadApplication
     private val policy: ApprovalPolicy = app.approvalPolicy
     private val tokenPolicy = ApprovalTokenPolicy(policy)
+    private val contextPolicy = ThreadContextPolicy()
+    private var activeWorkJob: Job? = null
     private val _uiState = MutableStateFlow(
-        AgentPadUiState(apiKeyConfigured = app.secureApiKeyStore.hasKey())
+        AgentPadUiState(
+            apiKeyConfigured = app.secureApiKeyStore.hasKey(),
+            crashReportAvailable = app.crashReporter.hasCrashReport()
+        )
     )
     val uiState: StateFlow<AgentPadUiState> = _uiState.asStateFlow()
-    val recentTasks: StateFlow<List<TaskRecord>> = app.repository.observeRecentTasks()
+    val threads: StateFlow<List<AgentThread>> = app.repository.observeThreads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val capabilities = listOf(
         CapabilityDescriptor(
             "model",
-            "国内模型",
+            "模型服务",
             "DeepSeek 或自定义 OpenAI-compatible 接口",
             CapabilityState.NEEDS_CONFIGURATION,
             RiskLevel.READ_ONLY,
-            "在设置中填写模型和 API Key"
+            "在设置中完成连接测试"
         ),
         CapabilityDescriptor(
             "documents",
@@ -111,17 +147,24 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             "Python、Git 和受限 Shell",
             CapabilityState.PLANNED,
             RiskLevel.ACTION_APPROVAL,
-            "计划通过独立签名 Runtime APK 提供"
+            "计划由后续独立签名 Runtime 提供"
         )
     )
 
     init {
         viewModelScope.launch {
-            app.settingsStore.providerSettings.collect { settings ->
+            app.repository.interruptActiveTurns()
+            val firstThread = app.repository.observeThreads().first().firstOrNull()
+            firstThread?.let { openThread(it.id) }
+        }
+        viewModelScope.launch {
+            app.settingsStore.preferences.collect { preferences ->
                 _uiState.update {
                     it.copy(
-                        providerSettings = settings,
-                        apiKeyConfigured = app.secureApiKeyStore.hasKey()
+                        providerSettings = preferences.providerSettings,
+                        apiKeyConfigured = app.secureApiKeyStore.hasKey(),
+                        theme = preferences.theme,
+                        privacyMode = preferences.privacyMode
                     )
                 }
             }
@@ -132,119 +175,260 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(section = section, error = null) }
     }
 
-    fun setGoal(goal: String) {
-        _uiState.update { it.copy(goal = goal.take(2_000), error = null) }
-    }
-
-    fun setProviderSettings(settings: ProviderSettings) {
-        _uiState.update { it.copy(providerSettings = settings, error = null) }
-    }
-
-    fun setApiKeyDraft(value: String) {
-        _uiState.update { it.copy(apiKeyDraft = value.take(512), error = null) }
-    }
-
-    fun saveProviderSettings() {
-        val state = _uiState.value
-        viewModelScope.launch {
-            runCatching {
-                validateSettings(state.providerSettings)
-                app.settingsStore.save(state.providerSettings)
-                if (state.apiKeyDraft.isNotBlank()) {
-                    app.secureApiKeyStore.save(state.apiKeyDraft)
-                }
-            }.onSuccess {
-                _uiState.update {
-                    it.copy(
-                        apiKeyConfigured = app.secureApiKeyStore.hasKey(),
-                        apiKeyDraft = "",
-                        error = null
-                    )
-                }
-            }.onFailure { failure ->
-                _uiState.update { it.copy(error = failure.safeMessage()) }
-            }
+    fun newThread() {
+        checkCanLeaveActiveTurn() ?: return
+        _uiState.update {
+            it.copy(
+                section = AppSection.THREAD,
+                selectedThreadId = null,
+                snapshot = null,
+                draftGoal = "",
+                selectedDocument = null,
+                approvalTokens = emptyMap(),
+                compressionRequired = false,
+                resultNotice = null,
+                error = null
+            )
         }
     }
 
-    fun testProvider() {
-        val state = _uiState.value
-        viewModelScope.launch {
-            setBusy(true)
-            runCatching {
-                val key = requireApiKey()
-                app.providerClient.test(state.providerSettings, key)
-            }.onSuccess { reply ->
-                _uiState.update {
-                    it.copy(
-                        result = if ("AGENTPAD_OK" in reply.uppercase()) {
-                            "模型连接成功"
-                        } else {
-                            "模型已响应：${reply.take(120)}"
-                        },
-                        error = null
-                    )
-                }
-            }.onFailure { failure ->
-                _uiState.update { it.copy(error = failure.safeMessage()) }
-            }
-            setBusy(false)
+    fun openThread(threadId: String) {
+        if (threadId != _uiState.value.selectedThreadId && checkCanLeaveActiveTurn() == null) {
+            return
         }
-    }
-
-    fun selectDocument(uri: Uri) {
         viewModelScope.launch {
-            val document = withContext(Dispatchers.IO) { describeDocument(uri) }
+            val snapshot = app.repository.loadThread(threadId) ?: return@launch
             _uiState.update {
                 it.copy(
-                    selectedDocument = document,
-                    currentPlan = null,
+                    selectedThreadId = threadId,
+                    snapshot = snapshot,
+                    section = AppSection.THREAD,
+                    draftGoal = "",
+                    selectedDocument = null,
                     approvalTokens = emptyMap(),
-                    result = null,
+                    compressionRequired = false,
+                    resultNotice = null,
                     error = null
                 )
             }
         }
     }
 
-    fun clearDocument() {
-        _uiState.update { it.copy(selectedDocument = null, currentPlan = null) }
+    fun setDraftGoal(goal: String) {
+        _uiState.update {
+            it.copy(
+                draftGoal = goal.take(MAX_GOAL_CHARS),
+                compressionRequired = false,
+                error = null
+            )
+        }
     }
 
-    fun createPlan() {
+    fun setProviderSettings(settings: ProviderSettings) {
+        _uiState.update { it.copy(providerSettings = settings, error = null, resultNotice = null) }
+    }
+
+    fun selectDeepSeek() {
+        setProviderSettings(
+            _uiState.value.providerSettings.copy(
+                providerId = "deepseek",
+                endpoint = "https://api.deepseek.com/chat/completions",
+                model = "deepseek-chat"
+            )
+        )
+    }
+
+    fun selectCustomProvider() {
+        setProviderSettings(_uiState.value.providerSettings.copy(providerId = "custom"))
+    }
+
+    fun setApiKeyDraft(value: String) {
+        _uiState.update { it.copy(apiKeyDraft = value.take(512), error = null, resultNotice = null) }
+    }
+
+    fun testAndSaveProvider() {
         val state = _uiState.value
-        if (state.goal.isBlank()) {
-            _uiState.update { it.copy(error = "请先写清楚希望 Agent 完成的任务") }
-            return
-        }
         viewModelScope.launch {
-            setBusy(true, TaskStatus.PLANNING)
+            setBusy(true)
             runCatching {
-                val key = requireApiKey()
-                app.providerClient.createPlan(
-                    goal = state.goal,
-                    selectedDocumentName = state.selectedDocument?.name,
-                    availableTools = app.toolExecutor.availableTools,
-                    settings = state.providerSettings,
-                    apiKey = key
-                )
-            }.onSuccess { plan ->
-                app.repository.savePlan(plan)
+                validateSettings(state.providerSettings)
+                val previousSettings = app.settingsStore.preferences.first().providerSettings
+                val previousKey = app.secureApiKeyStore.read()
+                val candidateKey = state.apiKeyDraft.ifBlank {
+                    previousKey ?: error("请输入 API Key")
+                }
+                app.providerClient.test(state.providerSettings, candidateKey)
+                try {
+                    if (state.apiKeyDraft.isNotBlank()) {
+                        app.secureApiKeyStore.save(candidateKey)
+                    }
+                    app.settingsStore.saveProvider(state.providerSettings)
+                } catch (failure: Throwable) {
+                    if (previousKey == null) {
+                        app.secureApiKeyStore.clear()
+                    } else {
+                        app.secureApiKeyStore.save(previousKey)
+                    }
+                    runCatching { app.settingsStore.saveProvider(previousSettings) }
+                    throw failure
+                }
+            }.onSuccess {
                 _uiState.update {
                     it.copy(
-                        currentPlan = plan,
-                        status = TaskStatus.AWAITING_APPROVAL,
-                        approvalTokens = emptyMap(),
-                        result = null,
+                        apiKeyConfigured = true,
+                        apiKeyDraft = "",
+                        resultNotice = "连接测试成功，配置已加密保存",
                         error = null
                     )
                 }
             }.onFailure { failure ->
                 _uiState.update {
-                    it.copy(status = TaskStatus.FAILED, error = failure.safeMessage())
+                    it.copy(error = failure.safeMessage(), resultNotice = null)
                 }
             }
             setBusy(false)
+        }
+    }
+
+    fun setTheme(theme: ThemePreference) {
+        viewModelScope.launch { app.settingsStore.setTheme(theme) }
+    }
+
+    fun setPrivacyMode(enabled: Boolean) {
+        viewModelScope.launch { app.settingsStore.setPrivacyMode(enabled) }
+    }
+
+    fun recordUiContext(section: AppSection, widthDp: Int) {
+        app.crashReporter.recordUiContext(section.name, widthDp)
+    }
+
+    fun dismissCrashReport() {
+        app.crashReporter.clearCrashReport()
+        _uiState.update { it.copy(crashReportAvailable = false) }
+    }
+
+    fun selectDocument(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { describeDocument(uri) } }
+                .onSuccess { document ->
+                    _uiState.update {
+                        it.copy(selectedDocument = document, error = null)
+                    }
+                }
+                .onFailure { failure ->
+                    _uiState.update { it.copy(error = failure.safeMessage()) }
+                }
+        }
+    }
+
+    fun clearDocument() {
+        _uiState.update { it.copy(selectedDocument = null) }
+    }
+
+    fun createPlan() {
+        val state = _uiState.value
+        if (state.draftGoal.isBlank()) {
+            _uiState.update { it.copy(error = "请先写清楚希望 AgentPad 完成的任务") }
+            return
+        }
+        if (!state.apiKeyConfigured) {
+            _uiState.update { it.copy(section = AppSection.SETTINGS, error = "请先配置并测试模型") }
+            return
+        }
+        if (hasRunningTurn(state.currentTurn)) {
+            _uiState.update { it.copy(error = "当前回合仍在执行，请先完成或取消") }
+            return
+        }
+        val messages = state.snapshot?.messages.orEmpty()
+        if (contextPolicy.needsCompression(messages)) {
+            _uiState.update { it.copy(compressionRequired = true, error = null) }
+            return
+        }
+        createPlanAfterContextReady()
+    }
+
+    fun confirmCompressionAndCreatePlan() {
+        val state = _uiState.value
+        val threadId = state.selectedThreadId ?: return
+        val history = contextPolicy.requestMessages(state.snapshot?.messages.orEmpty())
+        viewModelScope.launch {
+            setBusy(true)
+            try {
+                val summary = app.providerClient.compressContext(
+                    history = history,
+                    settings = state.providerSettings,
+                    apiKey = requireApiKey()
+                )
+                app.repository.addContextSummary(threadId, summary)
+                loadSelectedThread()
+                _uiState.update { it.copy(compressionRequired = false) }
+                setBusy(false)
+                createPlanAfterContextReady()
+            } catch (failure: Throwable) {
+                _uiState.update {
+                    it.copy(error = failure.safeMessage(), compressionRequired = false)
+                }
+                setBusy(false)
+            }
+        }
+    }
+
+    fun dismissCompression() {
+        _uiState.update { it.copy(compressionRequired = false) }
+    }
+
+    private fun createPlanAfterContextReady() {
+        if (activeWorkJob?.isActive == true || _uiState.value.busy) return
+        val state = _uiState.value
+        val goal = state.draftGoal.trim()
+        val history = contextPolicy.requestMessages(state.snapshot?.messages.orEmpty())
+        val attachment = state.selectedDocument?.toAttachment()
+        val attachmentMetadata = state.snapshot?.attachments.orEmpty() + listOfNotNull(attachment)
+        setBusy(true)
+        activeWorkJob = viewModelScope.launch {
+            var turn: AgentTurn? = null
+            try {
+                turn = app.repository.beginTurn(state.selectedThreadId, goal, attachment)
+                _uiState.update {
+                    it.copy(
+                        selectedThreadId = turn?.threadId,
+                        section = AppSection.PLAN,
+                        approvalTokens = emptyMap(),
+                        compressionRequired = false
+                    )
+                }
+                loadSelectedThread()
+                val plan = app.providerClient.createPlan(
+                    goal = goal,
+                    history = history,
+                    attachments = attachmentMetadata,
+                    availableTools = app.toolExecutor.availableTools,
+                    settings = state.providerSettings,
+                    apiKey = requireApiKey()
+                )
+                app.repository.savePlan(requireNotNull(turn), plan)
+                _uiState.update {
+                    it.copy(
+                        draftGoal = "",
+                        selectedDocument = null,
+                        section = AppSection.PLAN,
+                        resultNotice = "计划已生成，请检查风险和审批要求",
+                        error = null
+                    )
+                }
+                loadSelectedThread()
+            } catch (_: CancellationException) {
+                // cancelTurn records the terminal state and clears approvals.
+            } catch (failure: Throwable) {
+                turn?.let {
+                    app.repository.updateStatus(it, TurnStatus.FAILED, failure.safeMessage())
+                }
+                _uiState.update { it.copy(error = failure.safeMessage(), resultNotice = null) }
+                loadSelectedThread()
+            } finally {
+                activeWorkJob = null
+                setBusy(false)
+            }
         }
     }
 
@@ -277,24 +461,24 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun cancelTask() {
-        val plan = _uiState.value.currentPlan
+    fun cancelTurn() {
+        val turn = _uiState.value.currentTurn ?: return
+        activeWorkJob?.cancel()
+        activeWorkJob = null
         viewModelScope.launch {
-            if (plan != null) app.repository.updateStatus(plan, TaskStatus.CANCELLED)
+            app.repository.updateStatus(turn, TurnStatus.CANCELLED)
             _uiState.update {
-                it.copy(
-                    status = TaskStatus.CANCELLED,
-                    currentPlan = null,
-                    approvalTokens = emptyMap(),
-                    busy = false
-                )
+                it.copy(approvalTokens = emptyMap(), busy = false, resultNotice = "当前回合已取消")
             }
+            loadSelectedThread()
         }
     }
 
     fun executePlan() {
+        if (activeWorkJob?.isActive == true || _uiState.value.busy) return
         val state = _uiState.value
-        val plan = state.currentPlan ?: return
+        val turn = state.currentTurn ?: return
+        val plan = turn.plan ?: return
         val missing = missingApprovals(state, plan)
         if (missing.isNotEmpty()) {
             _uiState.update {
@@ -306,28 +490,31 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             return
         }
         consumeApprovals(state, plan)
-        viewModelScope.launch {
-            setBusy(true, TaskStatus.RUNNING)
-            app.repository.updateStatus(plan, TaskStatus.RUNNING)
-            runCatching {
-                executeActions(plan)
-            }.onSuccess { result ->
-                app.repository.updateStatus(plan, TaskStatus.COMPLETED, result)
+        setBusy(true)
+        activeWorkJob = viewModelScope.launch {
+            var runningTurn = app.repository.updateStatus(turn, TurnStatus.RUNNING)
+            loadSelectedThread()
+            try {
+                val result = executeActions(runningTurn, plan)
+                runningTurn = app.repository.updateStatus(runningTurn, TurnStatus.COMPLETED, result)
                 _uiState.update {
                     it.copy(
-                        status = TaskStatus.COMPLETED,
-                        result = result,
                         approvalTokens = emptyMap(),
+                        section = AppSection.THREAD,
+                        resultNotice = "任务已完成",
                         error = null
                     )
                 }
-            }.onFailure { failure ->
-                app.repository.updateStatus(plan, TaskStatus.FAILED, failure.safeMessage())
-                _uiState.update {
-                    it.copy(status = TaskStatus.FAILED, error = failure.safeMessage())
-                }
+            } catch (_: CancellationException) {
+                // cancelTurn records the terminal state and clears approvals.
+            } catch (failure: Throwable) {
+                app.repository.updateStatus(runningTurn, TurnStatus.FAILED, failure.safeMessage())
+                _uiState.update { it.copy(error = failure.safeMessage(), resultNotice = null) }
+            } finally {
+                loadSelectedThread()
+                activeWorkJob = null
+                setBusy(false)
             }
-            setBusy(false)
         }
     }
 
@@ -353,14 +540,51 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
-    private suspend fun executeActions(plan: TaskPlan): String {
+    fun requestDeleteThread(threadId: String) {
+        if (threadId == _uiState.value.selectedThreadId && checkCanLeaveActiveTurn() == null) {
+            return
+        }
+        _uiState.update { it.copy(deleteConfirmationThreadId = threadId) }
+    }
+
+    fun dismissDeleteThread() {
+        _uiState.update { it.copy(deleteConfirmationThreadId = null) }
+    }
+
+    fun confirmDeleteThread() {
+        val threadId = _uiState.value.deleteConfirmationThreadId ?: return
+        viewModelScope.launch {
+            val attachments = app.repository.deleteThread(threadId)
+            attachments.map { Uri.parse(it.uri) }.distinct().forEach { uri ->
+                runCatching {
+                    getApplication<Application>().contentResolver.releasePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    selectedThreadId = null,
+                    snapshot = null,
+                    deleteConfirmationThreadId = null,
+                    approvalTokens = emptyMap(),
+                    draftGoal = "",
+                    resultNotice = "线程已删除"
+                )
+            }
+            threads.value.firstOrNull()?.takeIf { it.id != threadId }?.let { openThread(it.id) }
+        }
+    }
+
+    private suspend fun executeActions(turn: AgentTurn, plan: TaskPlan): String {
         var finalResult = "任务步骤已完成"
         for (action in plan.actions.take(plan.maxSteps)) {
             val normalized = policy.normalize(action)
             require(normalized.risk != RiskLevel.FORBIDDEN) { "计划包含永久禁止的操作" }
             val result = when (normalized.tool) {
                 "read_document_metadata" -> {
-                    val doc = requireDocument()
+                    val doc = requireAttachment(turn)
                     ToolResult(
                         normalized.id,
                         true,
@@ -369,8 +593,8 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 "read_document" -> {
-                    val doc = requireDocument()
-                    val content = readDocument(doc.uri)
+                    val doc = requireAttachment(turn)
+                    val content = readDocument(Uri.parse(doc.uri))
                     ToolResult(
                         normalized.id,
                         true,
@@ -379,8 +603,8 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 "upload_document_for_summary" -> {
-                    val doc = requireDocument()
-                    val content = readDocument(doc.uri)
+                    val doc = requireAttachment(turn)
+                    val content = readDocument(Uri.parse(doc.uri))
                     val summary = app.providerClient.summarizeDocument(
                         goal = plan.goal,
                         documentName = doc.name,
@@ -389,20 +613,24 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                         apiKey = requireApiKey()
                     )
                     finalResult = summary
-                    ToolResult(normalized.id, true, "文档总结已完成", "模型返回 ${summary.length} 字符")
+                    ToolResult(
+                        normalized.id,
+                        true,
+                        "文档总结已完成",
+                        "模型返回 ${summary.length} 字符"
+                    )
                 }
                 else -> app.toolExecutor.executeIntentAction(normalized)
             }
             app.repository.audit(
-                taskId = plan.id,
+                taskId = turn.id,
                 actionId = normalized.id,
                 eventType = if (result.success) "TOOL_SUCCEEDED" else "TOOL_FAILED",
                 summary = result.summary
             )
             if (!result.success) error(result.summary)
         }
-        _uiState.update { it.copy(status = TaskStatus.VERIFYING) }
-        app.repository.updateStatus(plan, TaskStatus.VERIFYING)
+        app.repository.updateStatus(turn, TurnStatus.VERIFYING)
         return finalResult
     }
 
@@ -427,13 +655,19 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(approvalTokens = consumed) }
     }
 
-    private fun requireDocument(): SelectedDocument =
-        _uiState.value.selectedDocument ?: error("计划需要文件，但用户尚未选择")
+    private fun requireAttachment(turn: AgentTurn): ThreadAttachment {
+        return _uiState.value.snapshot?.attachments
+            ?.lastOrNull { it.turnId == turn.id }
+            ?: error("计划需要文件，但当前回合没有可用附件")
+    }
 
     private fun requireApiKey(): String =
         app.secureApiKeyStore.read() ?: error("尚未配置 API Key")
 
     private fun validateSettings(settings: ProviderSettings) {
+        require(settings.providerId in setOf("deepseek", "custom")) {
+            "仅支持 DeepSeek 或自定义 OpenAI-compatible 服务商"
+        }
         val endpoint = java.net.URI(settings.endpoint)
         val local = endpoint.host in setOf("127.0.0.1", "localhost", "::1")
         require(endpoint.scheme == "https" || (endpoint.scheme == "http" && local)) {
@@ -441,6 +675,24 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         }
         require(settings.model.isNotBlank()) { "模型名称不能为空" }
     }
+
+    private suspend fun loadSelectedThread() {
+        val threadId = _uiState.value.selectedThreadId ?: return
+        val snapshot = app.repository.loadThread(threadId) ?: return
+        _uiState.update { it.copy(snapshot = snapshot) }
+        app.crashReporter.updateAuditSummaries(app.repository.recentAuditSummaries())
+    }
+
+    private fun checkCanLeaveActiveTurn(): Unit? {
+        if (activeWorkJob?.isActive == true || hasRunningTurn(_uiState.value.currentTurn)) {
+            _uiState.update { it.copy(error = "当前回合仍在执行，请先完成或取消") }
+            return null
+        }
+        return Unit
+    }
+
+    private fun hasRunningTurn(turn: AgentTurn?): Boolean =
+        turn?.status in setOf(TurnStatus.PLANNING, TurnStatus.RUNNING, TurnStatus.VERIFYING)
 
     private fun describeDocument(uri: Uri): SelectedDocument {
         val resolver = getApplication<Application>().contentResolver
@@ -451,7 +703,7 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             mimeType.startsWith("text/") ||
                 mimeType in setOf("application/json", "application/xml", "application/octet-stream")
         ) {
-            "阶段一只支持文本、JSON 和 XML 文件"
+            "当前版本只支持文本、JSON 和 XML 文件"
         }
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
             ?.use { cursor ->
@@ -460,7 +712,7 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                     if (!cursor.isNull(1)) size = cursor.getLong(1)
                 }
             }
-        require((size ?: 0L) <= MAX_DOCUMENT_BYTES) { "阶段一只读取 1 MB 以内的文本文件" }
+        require((size ?: 0L) <= MAX_DOCUMENT_BYTES) { "当前版本只读取 1 MB 以内的文本文件" }
         return SelectedDocument(uri, name.take(200), mimeType, size)
     }
 
@@ -474,21 +726,15 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                 val read = input.read(buffer)
                 if (read < 0) break
                 total += read
-                require(total <= MAX_DOCUMENT_BYTES) { "文件超过阶段一的 1 MB 限制" }
+                require(total <= MAX_DOCUMENT_BYTES) { "文件超过当前版本的 1 MB 限制" }
                 output.write(buffer, 0, read)
             }
             output.toString(Charsets.UTF_8.name())
         } ?: error("无法读取所选文件")
     }
 
-    private fun setBusy(busy: Boolean, status: TaskStatus? = null) {
-        _uiState.update { current ->
-            current.copy(
-                busy = busy,
-                status = status ?: current.status,
-                error = if (busy) null else current.error
-            )
-        }
+    private fun setBusy(busy: Boolean) {
+        _uiState.update { it.copy(busy = busy, error = if (busy) null else it.error) }
     }
 
     private fun Throwable.safeMessage(): String {
@@ -500,6 +746,7 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val MAX_DOCUMENT_BYTES = 1024 * 1024
+        private const val MAX_GOAL_CHARS = 4_000
         private const val APPROVAL_TTL_MILLIS = 15 * 60 * 1000L
 
         fun factory(app: AgentPadApplication): ViewModelProvider.Factory =

@@ -38,8 +38,8 @@ class AndroidToolExecutor(private val context: Context) {
     private fun openUrl(action: PlannedAction): ToolResult {
         val raw = action.arguments["url"].orEmpty().trim()
         val uri = runCatching { Uri.parse(raw) }.getOrNull()
-        if (uri == null || uri.scheme !in setOf("https", "http")) {
-            return ToolResult(action.id, false, "网址无效", errorCode = "INVALID_URL")
+        if (uri == null || uri.scheme != "https" || uri.host.isNullOrBlank()) {
+            return ToolResult(action.id, false, "网址必须是有效的 HTTPS 地址", errorCode = "INVALID_URL")
         }
         return runCatching {
             context.startActivity(

@@ -15,6 +15,13 @@ val hasReleaseSigning = listOf(
     releaseKeyAlias,
     releaseKeyPassword
 ).all { !it.isNullOrBlank() }
+val gitSha = providers.environmentVariable("GITHUB_SHA").orNull
+    ?.take(12)
+    ?: runCatching {
+        providers.exec {
+            commandLine("git", "rev-parse", "--short=12", "HEAD")
+        }.standardOutput.asText.get().trim()
+    }.getOrDefault("unknown")
 
 android {
     namespace = "com.agentpad.app"
@@ -25,8 +32,10 @@ android {
         applicationId = "com.agentpad.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 201
-        versionName = "0.2.0-alpha.1"
+        versionCode = 211
+        versionName = "0.2.1-alpha.1"
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        buildConfigField("String", "BUILD_CHANNEL", "\"development\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -48,6 +57,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BUILD_CHANNEL", "\"debug\"")
+        }
         release {
             isMinifyEnabled = true
             signingConfig = signingConfigs.findByName("release")
@@ -55,6 +67,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "BUILD_CHANNEL", "\"release\"")
         }
     }
 
@@ -72,6 +85,14 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+}
+
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+        arg("room.incremental", "true")
+    }
+    correctErrorTypes = true
 }
 
 dependencies {
@@ -95,14 +116,13 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-}
-
-kapt {
-    correctErrorTypes = true
 }

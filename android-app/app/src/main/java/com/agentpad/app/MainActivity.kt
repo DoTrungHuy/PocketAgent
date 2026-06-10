@@ -10,11 +10,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import com.agentpad.app.ui.AgentPadRoot
 import com.agentpad.app.ui.AgentPadViewModel
-import com.agentpad.app.ui.theme.AgentPadTheme
 
 class MainActivity : ComponentActivity() {
+    private val app: AgentPadApplication
+        get() = application as AgentPadApplication
+
     private val viewModel: AgentPadViewModel by viewModels {
-        AgentPadViewModel.factory(application as AgentPadApplication)
+        AgentPadViewModel.factory(app)
     }
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -29,26 +31,45 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val createDiagnosticFile = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            runCatching { app.crashReporter.export(uri) }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
         setContent {
-            AgentPadTheme {
-                AgentPadRoot(
-                    viewModel = viewModel,
-                    onChooseDocument = {
-                        openDocument.launch(
-                            arrayOf(
-                                "text/*",
-                                "application/json",
-                                "application/xml",
-                                "text/markdown"
-                            )
+            AgentPadRoot(
+                viewModel = viewModel,
+                onChooseDocument = {
+                    openDocument.launch(
+                        arrayOf(
+                            "text/*",
+                            "application/json",
+                            "application/xml",
+                            "text/markdown"
                         )
-                    }
-                )
-            }
+                    )
+                },
+                onPrivacyModeChanged = ::applyPrivacyMode,
+                onExportDiagnostics = {
+                    createDiagnosticFile.launch(
+                        "AgentPad-diagnostics-${BuildConfig.VERSION_NAME}.json"
+                    )
+                }
+            )
+        }
+    }
+
+    private fun applyPrivacyMode(enabled: Boolean) {
+        if (enabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 }

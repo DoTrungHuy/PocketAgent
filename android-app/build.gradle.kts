@@ -1,5 +1,8 @@
 import org.cyclonedx.model.Component
 
+group = "com.agentpad"
+version = "0.2.1-alpha.1"
+
 plugins {
     id("com.android.application") version "8.9.1" apply false
     id("org.jetbrains.kotlin.android") version "2.0.21" apply false
@@ -11,7 +14,7 @@ plugins {
 tasks.cyclonedxBom {
     projectType.set(Component.Type.APPLICATION)
     componentName.set("AgentPad")
-    componentVersion.set("0.2.0-alpha.1")
+    componentVersion.set("0.2.1-alpha.1")
     includeLicenseText.set(false)
     includeBuildSystem.set(true)
 }

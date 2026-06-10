@@ -2,7 +2,7 @@ package com.agentpad.app.domain
 
 import java.util.UUID
 
-enum class TaskStatus {
+enum class TurnStatus {
     DRAFT,
     PLANNING,
     AWAITING_APPROVAL,
@@ -10,7 +10,31 @@ enum class TaskStatus {
     VERIFYING,
     COMPLETED,
     FAILED,
-    CANCELLED
+    CANCELLED,
+    INTERRUPTED,
+    SUPERSEDED
+}
+
+typealias TaskStatus = TurnStatus
+
+enum class ThreadStatus {
+    ACTIVE,
+    COMPLETED,
+    FAILED
+}
+
+enum class MessageRole {
+    USER,
+    ASSISTANT,
+    SYSTEM
+}
+
+enum class MessageKind {
+    GOAL,
+    PLAN,
+    RESULT,
+    STATUS,
+    CONTEXT_SUMMARY
 }
 
 enum class RiskLevel {
@@ -92,6 +116,54 @@ data class ProviderSettings(
     val model: String = "",
     val visionEndpoint: String = "",
     val visionModel: String = ""
+)
+
+data class AgentThread(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val status: ThreadStatus = ThreadStatus.ACTIVE,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt
+)
+
+data class AgentTurn(
+    val id: String = UUID.randomUUID().toString(),
+    val threadId: String,
+    val ordinal: Int,
+    val goal: String,
+    val plan: TaskPlan?,
+    val status: TurnStatus,
+    val result: String?,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt
+)
+
+data class ThreadMessage(
+    val id: String = UUID.randomUUID().toString(),
+    val threadId: String,
+    val turnId: String?,
+    val role: MessageRole,
+    val kind: MessageKind,
+    val content: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class ThreadAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val threadId: String,
+    val turnId: String?,
+    val uri: String,
+    val name: String,
+    val mimeType: String,
+    val size: Long?,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class ThreadSnapshot(
+    val thread: AgentThread,
+    val turns: List<AgentTurn>,
+    val messages: List<ThreadMessage>,
+    val attachments: List<ThreadAttachment>
 )
 
 data class TaskRecord(
