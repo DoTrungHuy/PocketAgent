@@ -22,10 +22,22 @@ Android 会显示标准安装确认。AgentPad 不要求安装 Termux、Google P
 | --- | --- | --- |
 | `v0.1.0-dev` Termux Lite | 两台平板核心链路已验证 | 保留兼容版本与技术基线 |
 | `v0.2.0-alpha.1` Native Core | 已发布 | 独立 APK、模型配置、任务计划、审批和授权文件处理 |
+| `v0.2.1-alpha` UI Onboarding | 分支开发中 | 更简洁的科技感工作台、首次启动配置引导和模型选择优化 |
 | `v0.3.0-alpha` Device Agent | 规划完成 | 无障碍跨应用操作和可选视觉理解 |
 | `v0.4.0-alpha` Runtime | 可行性验证待办 | 独立签名 Runtime APK，提供受限开发工具 |
 
 现有 Termux 版本位于 [`termux-lite/`](termux-lite/README.md)。它不会被删除，但不再是主产品。
+
+## v0.2.1-alpha 计划
+
+`ui-onboarding-021` 分支正在进行体验优化，目标是让 AgentPad 从“能用”变成“更好看、更好配置”。
+
+- 重构深色科技感工作台主题，参考 Claude Code / Codex 的简洁任务界面；
+- 首次启动时引导用户配置模型，而不是直接进入空任务页；
+- 设置页从开发者表单逐步改为 Model Setup Wizard；
+- 模型服务商优先提供 DeepSeek 与自定义 OpenAI-compatible，后续扩展硅基流动、Kimi、通义千问；
+- 未配置模型时，任务页会清楚提示先完成模型配置；
+- 不改动现有安全审批边界，不加入无障碍、Shizuku、Runtime 或 Shell 能力。
 
 ## 原生 MVP
 
