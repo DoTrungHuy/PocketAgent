@@ -49,7 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: agentpad-instrumentation-reports
+          name: pocketagent-instrumentation-reports
           if-no-files-found: ignore
           path: |
             android-app/app/build/reports/androidTests/

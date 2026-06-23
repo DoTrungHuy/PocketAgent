@@ -44,14 +44,14 @@ jobs:
           ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
           short_sha="${GITHUB_SHA:0:12}"
           cp app/build/outputs/apk/debug/app-debug.apk \
-            "app/build/outputs/apk/debug/AgentPad-debug-${short_sha}.apk"
+            "app/build/outputs/apk/debug/PocketAgent-debug-${short_sha}.apk"
           echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload verification reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: agentpad-ci-reports
+          name: pocketagent-ci-reports
           if-no-files-found: ignore
           path: |
             android-app/app/build/reports/tests/
@@ -60,5 +60,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v6
         with:
-          name: AgentPad-debug-${{ steps.build.outputs.short_sha }}
-          path: android-app/app/build/outputs/apk/debug/AgentPad-debug-${{ steps.build.outputs.short_sha }}.apk
+          name: PocketAgent-debug-${{ steps.build.outputs.short_sha }}
+          path: android-app/app/build/outputs/apk/debug/PocketAgent-debug-${{ steps.build.outputs.short_sha }}.apk
