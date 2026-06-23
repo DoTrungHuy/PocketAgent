@@ -1,4 +1,4 @@
-package com.agentpad.app.policy
+﻿package com.agentpad.app.policy
 
 import com.agentpad.app.domain.ApprovalScope
 import com.agentpad.app.domain.ApprovalToken
@@ -16,12 +16,7 @@ class ApprovalTokenPolicy(private val approvalPolicy: ApprovalPolicy) {
             remainingUses = 1
         )
 
-    fun createActionToken(
-        plan: TaskPlan,
-        action: PlannedAction,
-        now: Long,
-        ttlMillis: Long
-    ): ApprovalToken =
+    fun createActionToken(plan: TaskPlan, action: PlannedAction, now: Long, ttlMillis: Long): ApprovalToken =
         ApprovalToken(
             taskId = plan.id,
             actionId = action.id,
@@ -40,12 +35,7 @@ class ApprovalTokenPolicy(private val approvalPolicy: ApprovalPolicy) {
             token.expiresAt >= now &&
             token.remainingUses > 0
 
-    fun isActionValid(
-        token: ApprovalToken?,
-        plan: TaskPlan,
-        action: PlannedAction,
-        now: Long
-    ): Boolean =
+    fun isActionValid(token: ApprovalToken?, plan: TaskPlan, action: PlannedAction, now: Long): Boolean =
         token != null &&
             token.taskId == plan.id &&
             token.actionId == action.id &&
@@ -55,7 +45,7 @@ class ApprovalTokenPolicy(private val approvalPolicy: ApprovalPolicy) {
             token.remainingUses > 0
 
     fun consume(token: ApprovalToken): ApprovalToken {
-        require(token.remainingUses > 0) { "审批令牌已使用" }
+        require(token.remainingUses > 0) { "Approval token has already been used" }
         return token.copy(remainingUses = token.remainingUses - 1)
     }
 

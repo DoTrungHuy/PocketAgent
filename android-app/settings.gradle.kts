@@ -1,5 +1,5 @@
-pluginManagement {
-    val useChinaMirrors = providers.gradleProperty("agentpad.useChinaMirrors")
+﻿pluginManagement {
+    val useChinaMirrors = providers.gradleProperty("pocketagent.useChinaMirrors")
         .orNull
         .toBoolean()
     repositories {
@@ -17,7 +17,7 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    val useChinaMirrors = providers.gradleProperty("agentpad.useChinaMirrors")
+    val useChinaMirrors = providers.gradleProperty("pocketagent.useChinaMirrors")
         .orNull
         .toBoolean()
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -33,14 +33,14 @@ dependencyResolutionManagement {
     }
 }
 
-val useChinaMirrors = providers.gradleProperty("agentpad.useChinaMirrors")
+val useChinaMirrors = providers.gradleProperty("pocketagent.useChinaMirrors")
     .orNull
     .toBoolean()
 if (useChinaMirrors) {
-    println("AgentPad 构建源：阿里云 Maven 镜像（需与官方坐标保持一致）")
+    println("PocketAgent build repositories: Aliyun Maven mirrors")
 } else {
-    println("AgentPad 构建源：Google Maven / Maven Central 官方源")
+    println("PocketAgent build repositories: Google Maven / Maven Central")
 }
 
-rootProject.name = "AgentPad"
+rootProject.name = "PocketAgent"
 include(":app")

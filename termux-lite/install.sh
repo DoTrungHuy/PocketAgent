@@ -2,8 +2,8 @@
 set -eu
 
 SOURCE_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-AGENTPAD_HOME="${AGENTPAD_HOME:-$HOME/.agentpad}"
-APP_DIR="$AGENTPAD_HOME/app"
+POCKETAGENT_HOME="${POCKETAGENT_HOME:-$HOME/.pocketagent}"
+APP_DIR="$POCKETAGENT_HOME/app"
 BIN_DIR="${PREFIX:-/data/data/com.termux/files/usr}/bin"
 NO_CONFIG=0
 UPDATE=0
@@ -16,16 +16,16 @@ for arg in "$@"; do
   esac
 done
 
-case "$AGENTPAD_HOME" in
+case "$POCKETAGENT_HOME" in
   ""|"/"|"$HOME")
-    echo "拒绝使用不安全的 AGENTPAD_HOME：$AGENTPAD_HOME" >&2
+    echo "拒绝使用不安全的 POCKETAGENT_HOME：$POCKETAGENT_HOME" >&2
     exit 1
     ;;
 esac
 
 if [ -z "${PREFIX:-}" ] || [ ! -x "$(command -v pkg 2>/dev/null || true)" ]; then
-  if [ "${AGENTPAD_ALLOW_NON_TERMUX:-0}" != "1" ]; then
-    echo "AgentPad 首版仅支持 Termux。请从 F-Droid 或 Termux 官方可信渠道安装。" >&2
+  if [ "${POCKETAGENT_ALLOW_NON_TERMUX:-0}" != "1" ]; then
+    echo "PocketAgent 首版仅支持 Termux。请从 F-Droid 或 Termux 官方可信渠道安装。" >&2
     exit 1
   fi
 fi
@@ -50,36 +50,36 @@ python -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'
   exit 1
 }
 
-echo "[3/5] 安装 AgentPad 程序"
-mkdir -p "$APP_DIR/config" "$APP_DIR/web" "$AGENTPAD_HOME/logs" "$AGENTPAD_HOME/sessions"
-cp "$SOURCE_DIR/app/agentpad.py" "$APP_DIR/agentpad.py"
+echo "[3/5] 安装 PocketAgent 程序"
+mkdir -p "$APP_DIR/config" "$APP_DIR/web" "$POCKETAGENT_HOME/logs" "$POCKETAGENT_HOME/sessions"
+cp "$SOURCE_DIR/app/pocketagent.py" "$APP_DIR/pocketagent.py"
 cp "$SOURCE_DIR/app/web/index.html" "$APP_DIR/web/index.html"
 cp "$SOURCE_DIR/config/providers.json" "$APP_DIR/config/providers.json"
 cp "$SOURCE_DIR/VERSION" "$APP_DIR/VERSION"
-cp "$SOURCE_DIR/agentpad" "$APP_DIR/agentpad-launcher"
-chmod 700 "$APP_DIR/agentpad.py" "$APP_DIR/agentpad-launcher"
+cp "$SOURCE_DIR/pocketagent" "$APP_DIR/pocketagent-launcher"
+chmod 700 "$APP_DIR/pocketagent.py" "$APP_DIR/pocketagent-launcher"
 
 mkdir -p "$BIN_DIR"
-cp "$SOURCE_DIR/agentpad" "$BIN_DIR/agentpad"
-chmod 700 "$BIN_DIR/agentpad"
+cp "$SOURCE_DIR/pocketagent" "$BIN_DIR/pocketagent"
+chmod 700 "$BIN_DIR/pocketagent"
 
 echo "[4/5] 创建工作目录"
-mkdir -p "$HOME/AgentPadWorkspace"
-chmod 700 "$AGENTPAD_HOME"
+mkdir -p "$HOME/PocketAgentWorkspace"
+chmod 700 "$POCKETAGENT_HOME"
 
 if [ "$UPDATE" -eq 0 ]; then
-  rm -rf "$AGENTPAD_HOME/source"
-  mkdir -p "$AGENTPAD_HOME/source"
-  cp "$SOURCE_DIR/install.sh" "$AGENTPAD_HOME/source/install.sh"
-  cp -R "$SOURCE_DIR/app" "$AGENTPAD_HOME/source/app"
-  cp -R "$SOURCE_DIR/config" "$AGENTPAD_HOME/source/config"
-  cp "$SOURCE_DIR/agentpad" "$SOURCE_DIR/VERSION" "$AGENTPAD_HOME/source/"
+  rm -rf "$POCKETAGENT_HOME/source"
+  mkdir -p "$POCKETAGENT_HOME/source"
+  cp "$SOURCE_DIR/install.sh" "$POCKETAGENT_HOME/source/install.sh"
+  cp -R "$SOURCE_DIR/app" "$POCKETAGENT_HOME/source/app"
+  cp -R "$SOURCE_DIR/config" "$POCKETAGENT_HOME/source/config"
+  cp "$SOURCE_DIR/pocketagent" "$SOURCE_DIR/VERSION" "$POCKETAGENT_HOME/source/"
 fi
 
 echo "[5/5] 安装完成"
-echo "命令位置：$BIN_DIR/agentpad"
+echo "命令位置：$BIN_DIR/pocketagent"
 if [ "$NO_CONFIG" -eq 0 ]; then
-  agentpad configure
+  pocketagent configure
 else
-  echo "已跳过配置。稍后运行 agentpad configure。"
+  echo "已跳过配置。稍后运行 pocketagent configure。"
 fi

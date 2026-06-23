@@ -1,4 +1,4 @@
-# AgentPad 实机操作与回传指南
+# PocketAgent 实机操作与回传指南
 
 本指南用于小米平板 7S Pro 和联想小新 Pad 2024。建议先只测试一台，修正问题后再测试第二台。
 
@@ -7,7 +7,7 @@
 当前还没有 GitHub 发布包，先把电脑上的整个目录：
 
 ```text
-D:\AgentPad部署
+D:\PocketAgent部署
 ```
 
 复制到平板的“下载”目录。不要只复制 `install.sh`，必须保留 `app`、`config`、`docs` 等子目录。
@@ -31,13 +31,13 @@ Android 弹出权限申请时，允许 Termux 访问共享文件。
 一般下载目录对应：
 
 ```bash
-cd ~/storage/downloads/AgentPad部署
+cd ~/storage/downloads/PocketAgent部署
 ```
 
 如果你给目录改成了英文名，则使用实际目录名，例如：
 
 ```bash
-cd ~/storage/downloads/AgentPad
+cd ~/storage/downloads/PocketAgent
 ```
 
 先确认文件完整：
@@ -49,7 +49,7 @@ ls
 应该至少看到：
 
 ```text
-app  config  docs  tests  install.sh  agentpad  README.md
+app  config  docs  tests  install.sh  pocketagent  README.md
 ```
 
 开始安装：
@@ -84,7 +84,7 @@ API Key 输入时终端不会显示字符，这是正常现象。
 ## 五、先做基础诊断
 
 ```bash
-agentpad doctor
+pocketagent doctor
 ```
 
 这一步不调用模型，不产生模型费用。将所有 `[FAIL]` 行记录下来。
@@ -92,7 +92,7 @@ agentpad doctor
 然后执行一次真实 API 测试：
 
 ```bash
-agentpad doctor --test-api
+pocketagent doctor --test-api
 ```
 
 预期出现：
@@ -106,7 +106,7 @@ agentpad doctor --test-api
 ## 六、测试终端 Agent
 
 ```bash
-agentpad chat
+pocketagent chat
 ```
 
 依次发送以下内容：
@@ -120,7 +120,7 @@ agentpad chat
 ```
 
 ```text
-请在工作目录创建 test-agentpad.txt，写入“AgentPad 实机测试成功”，然后读取并告诉我内容。
+请在工作目录创建 test-pocketagent.txt，写入“PocketAgent 实机测试成功”，然后读取并告诉我内容。
 ```
 
 确认三轮都成功后输入：
@@ -134,13 +134,13 @@ agentpad chat
 启动后台服务：
 
 ```bash
-agentpad start
+pocketagent start
 ```
 
 查看状态：
 
 ```bash
-agentpad status
+pocketagent status
 ```
 
 打开平板浏览器，访问：
@@ -154,8 +154,8 @@ http://127.0.0.1:8765
 如果第二条消息失败，执行：
 
 ```bash
-agentpad status
-agentpad logs
+pocketagent status
+pocketagent logs
 ```
 
 并记录平板是否开启了省电模式、是否允许 Termux 后台运行。
@@ -165,44 +165,44 @@ agentpad logs
 普通报告，不调用模型：
 
 ```bash
-agentpad report
+pocketagent report
 ```
 
 完成模型测试后推荐生成：
 
 ```bash
-agentpad report --test-api
+pocketagent report --test-api
 ```
 
 报告默认位于 Termux 主目录，文件名类似：
 
 ```text
-AgentPadReport-20260610-103000.txt
+PocketAgentReport-20260610-103000.txt
 ```
 
 为了方便在文件管理器中找到，可以复制到下载目录：
 
 ```bash
-cp ~/AgentPadReport-*.txt ~/storage/downloads/
+cp ~/PocketAgentReport-*.txt ~/storage/downloads/
 ```
 
 报告不会主动收集 API Key、设备序列号或 Android ID。发送前仍请用下面命令查看：
 
 ```bash
-cat ~/AgentPadReport-*.txt
+cat ~/PocketAgentReport-*.txt
 ```
 
 绝对不要发送：
 
 ```text
-~/.agentpad/secrets.env
+~/.pocketagent/secrets.env
 ```
 
 ## 九、发回哪些内容
 
 每台平板分别发回：
 
-1. `AgentPadReport-日期时间.txt`
+1. `PocketAgentReport-日期时间.txt`
 2. 设备名称和系统版本
 3. 失败发生在哪一步
 4. 失败前执行的最后一条命令或最后一次操作

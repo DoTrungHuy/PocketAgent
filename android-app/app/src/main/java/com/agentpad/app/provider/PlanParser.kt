@@ -1,4 +1,4 @@
-package com.agentpad.app.provider
+﻿package com.agentpad.app.provider
 
 import com.agentpad.app.domain.PlannedAction
 import com.agentpad.app.domain.RiskLevel
@@ -12,16 +12,13 @@ class PlanParser(private val policy: ApprovalPolicy) {
         try {
             val root = JSONObject(extractJson(raw))
             val actionsJson = root.getJSONArray("actions")
-            require(actionsJson.length() in 1..MAX_ACTIONS) {
-                "计划步骤数量必须在 1 到 $MAX_ACTIONS 之间"
-            }
+            require(actionsJson.length() in 1..MAX_ACTIONS) { "Plan must contain 1 to $MAX_ACTIONS actions" }
             val actions = buildList {
                 for (index in 0 until actionsJson.length()) {
                     val item = actionsJson.getJSONObject(index)
                     val tool = item.getString("tool").trim()
-                    require(tool.isNotEmpty()) { "计划步骤缺少工具名称" }
-                    require(tool in policy.knownTools()) { "计划包含未知工具：$tool" }
-
+                    require(tool.isNotEmpty()) { "Plan action is missing a tool name" }
+                    require(tool in policy.knownTools()) { "Plan contains unknown tool: $tool" }
                     val arguments = when {
                         !item.has("arguments") || item.isNull("arguments") -> null
                         else -> item.getJSONObject("arguments")
@@ -30,7 +27,7 @@ class PlanParser(private val policy: ApprovalPolicy) {
                         arguments?.keys()?.forEach { key ->
                             val value = arguments.get(key)
                             require(value is String || value is Number || value is Boolean) {
-                                "工具参数必须是字符串、数字或布尔值"
+                                "Tool arguments must be strings, numbers, or booleans"
                             }
                             put(key, value.toString())
                         }
@@ -45,24 +42,19 @@ class PlanParser(private val policy: ApprovalPolicy) {
                             reversible = item.optBoolean("reversible", false)
                         )
                     )
-                    require(action.risk != RiskLevel.FORBIDDEN) {
-                        "计划包含永久禁止的操作：$tool"
-                    }
+                    require(action.risk != RiskLevel.FORBIDDEN) { "Plan contains a forbidden action: $tool" }
                     add(action)
                 }
             }
             return TaskPlan(
                 goal = goal.take(MAX_GOAL),
-                title = root.optString("title", "新任务").take(MAX_TEXT),
+                title = root.optString("title", "New task").take(MAX_TEXT),
                 summary = root.optString("summary").take(MAX_TEXT),
                 actions = actions,
-                stopCondition = root.optString(
-                    "stopCondition",
-                    "目标完成、用户取消或出现无法安全处理的错误"
-                ).take(MAX_TEXT)
+                stopCondition = root.optString("stopCondition", "Goal completed, user cancelled, or unsafe request detected.").take(MAX_TEXT)
             )
         } catch (failure: JSONException) {
-            throw IllegalArgumentException("模型返回的任务计划格式无效", failure)
+            throw IllegalArgumentException("Model returned an invalid task plan", failure)
         }
     }
 
@@ -75,7 +67,7 @@ class PlanParser(private val policy: ApprovalPolicy) {
             .trim()
         val start = trimmed.indexOf('{')
         val end = trimmed.lastIndexOf('}')
-        require(start >= 0 && end > start) { "模型未返回 JSON 任务计划" }
+        require(start >= 0 && end > start) { "Model did not return a JSON task plan" }
         return trimmed.substring(start, end + 1)
     }
 

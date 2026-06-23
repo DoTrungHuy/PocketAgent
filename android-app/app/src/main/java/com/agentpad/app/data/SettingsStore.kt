@@ -9,7 +9,7 @@ import com.agentpad.app.domain.ProviderSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.agentPadDataStore by preferencesDataStore(name = "agentpad_settings")
+private val Context.pocketAgentDataStore by preferencesDataStore(name = "pocketagent_settings")
 
 enum class ThemePreference {
     LIGHT,
@@ -34,7 +34,7 @@ class SettingsStore(private val context: Context) {
         val privacyMode = booleanPreferencesKey("privacy_mode")
     }
 
-    val preferences: Flow<AppPreferences> = context.agentPadDataStore.data.map { values ->
+    val preferences: Flow<AppPreferences> = context.pocketAgentDataStore.data.map { values ->
         AppPreferences(
             providerSettings = ProviderSettings(
                 providerId = values[Keys.providerId] ?: "deepseek",
@@ -54,7 +54,7 @@ class SettingsStore(private val context: Context) {
     val providerSettings: Flow<ProviderSettings> = preferences.map { it.providerSettings }
 
     suspend fun saveProvider(settings: ProviderSettings) {
-        context.agentPadDataStore.edit { values ->
+        context.pocketAgentDataStore.edit { values ->
             values[Keys.providerId] = settings.providerId.trim()
             values[Keys.endpoint] = settings.endpoint.trim()
             values[Keys.model] = settings.model.trim()
@@ -65,14 +65,14 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setTheme(theme: ThemePreference) {
-        context.agentPadDataStore.edit { it[Keys.theme] = theme.name }
+        context.pocketAgentDataStore.edit { it[Keys.theme] = theme.name }
     }
 
     suspend fun setPrivacyMode(enabled: Boolean) {
-        context.agentPadDataStore.edit { it[Keys.privacyMode] = enabled }
+        context.pocketAgentDataStore.edit { it[Keys.privacyMode] = enabled }
     }
 
     suspend fun clear() {
-        context.agentPadDataStore.edit { it.clear() }
+        context.pocketAgentDataStore.edit { it.clear() }
     }
 }

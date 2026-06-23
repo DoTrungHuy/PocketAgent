@@ -1,4 +1,4 @@
-# AgentPad 实机测试结果
+# PocketAgent 实机测试结果
 
 本文只记录报告和日志能够证明的结果。用户主观确认但报告中没有证据的项目，继续列为待验证。
 
@@ -20,11 +20,11 @@
 已通过：
 
 - `install.sh` 完成安装，没有出现 Traceback、ERROR 或失败信息。
-- AgentPad `0.1.0-dev` 正确安装到 Termux 用户目录。
+- PocketAgent `0.1.0-dev` 正确安装到 Termux 用户目录。
 - 安装器只处理 Python、curl 和 CA 证书，没有调用 Google 服务。
 - DeepSeek 配置成功，请求模型名为 `deepseek-v4-flash`。
-- `agentpad doctor --test-api` 共 10 项通过、0 项失败。
-- DeepSeek 真实 API 调用返回 `AGENTPAD_OK`。
+- `pocketagent doctor --test-api` 共 10 项通过、0 项失败。
+- DeepSeek 真实 API 调用返回 `POCKETAGENT_OK`。
 - Web UI 仅监听 `127.0.0.1:8765`。
 - Web 首页和状态接口返回 HTTP 200。
 - 网页对话接口连续出现 3 次 HTTP 200。
@@ -34,7 +34,7 @@
 需要准确说明：
 
 - 这不是纯净 Termux 环境。设备测试前已经存在 Node.js、npm、PRoot、proot-distro 和其他软件包。
-- 安装日志表明 AgentPad 没有依赖或安装上述组件，因此轻量运行路线得到验证；但“空环境首次安装”仍需另测。
+- 安装日志表明 PocketAgent 没有依赖或安装上述组件，因此轻量运行路线得到验证；但“空环境首次安装”仍需另测。
 - DeepSeek 和当前模型服务的 HTTP 401 是未携带认证信息的网络探测结果，表示端点可达；后续带密钥的真实 API 测试已经成功。
 - 阿里云百炼的 HTTP 404 同样来自根地址网络探测，不代表当前 DeepSeek 配置失败。
 - `favicon.ico` 的 HTTP 404 只表示项目暂未提供网页图标，不影响 Web UI。
@@ -69,10 +69,10 @@
 
 已通过：
 
-- AgentPad `0.1.0-dev` 能够正常运行。
+- PocketAgent `0.1.0-dev` 能够正常运行。
 - DeepSeek 配置成功，请求模型名为 `deepseek-v4-flash`。
-- `agentpad doctor --test-api` 共 10 项通过、0 项失败。
-- DeepSeek 真实 API 调用返回 `AGENTPAD_OK`。
+- `pocketagent doctor --test-api` 共 10 项通过、0 项失败。
+- DeepSeek 真实 API 调用返回 `POCKETAGENT_OK`。
 - Web UI 仅监听 `127.0.0.1:8765`。
 - Web 首页、状态接口和网页对话接口均返回 HTTP 200。
 - 文件工具已开启。

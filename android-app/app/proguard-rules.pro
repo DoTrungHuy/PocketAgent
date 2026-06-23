@@ -1,3 +1,4 @@
 -keepattributes *Annotation*
 -keep class androidx.room.** { *; }
 -dontwarn org.json.**
+-dontwarn com.gemalto.jp2.JP2Decoder

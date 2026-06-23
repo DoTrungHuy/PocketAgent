@@ -8,26 +8,32 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import com.agentpad.app.ui.AgentPadRoot
-import com.agentpad.app.ui.AgentPadViewModel
+import com.agentpad.app.ui.PocketAgentRoot
+import com.agentpad.app.ui.PocketAgentViewModel
 
 class MainActivity : ComponentActivity() {
-    private val app: AgentPadApplication
-        get() = application as AgentPadApplication
+    private val app: PocketAgentApplication
+        get() = application as PocketAgentApplication
 
-    private val viewModel: AgentPadViewModel by viewModels {
-        AgentPadViewModel.factory(app)
+    private val viewModel: PocketAgentViewModel by viewModels {
+        PocketAgentViewModel.factory(app)
     }
 
-    private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    private val openDocuments = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        uris.forEach { uri ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        viewModel.onFilesGranted(uris)
+    }
+
+    private val openDocumentTree = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            viewModel.selectDocument(uri)
+            viewModel.onFolderGranted(uri)
         }
     }
 
@@ -43,25 +49,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AgentPadRoot(
+            PocketAgentRoot(
                 viewModel = viewModel,
-                onChooseDocument = {
-                    openDocument.launch(
+                onChooseFiles = {
+                    openDocuments.launch(
                         arrayOf(
-                            "image/*",
                             "text/*",
                             "application/json",
                             "application/xml",
+                            "text/html",
                             "text/markdown",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             "application/pdf",
                             "application/octet-stream"
                         )
                     )
                 },
+                onChooseFolder = {
+                    openDocumentTree.launch(null)
+                },
                 onPrivacyModeChanged = ::applyPrivacyMode,
                 onExportDiagnostics = {
                     createDiagnosticFile.launch(
-                        "AgentPad-diagnostics-${BuildConfig.VERSION_NAME}.json"
+                        "PocketAgent-diagnostics-${BuildConfig.VERSION_NAME}.json"
                     )
                 }
             )

@@ -1,35 +1,19 @@
-# AgentPad Release Process
+﻿# PocketAgent Release Process
 
-## Release identity
+PocketAgent releases are published from the `main` branch of `DoTrungHuy/PocketAgent`.
 
-The Android release keystore is the long-term upgrade identity for AgentPad.
-Losing it prevents future APKs from upgrading existing installations. Leaking
-it lets an attacker sign malicious updates.
+## Version checklist
 
-The keystore must never be committed. Keep at least two encrypted offline
-backups, and keep the recovery credentials separately.
+1. Update Gradle `versionName`, root project version, release notes, README links, and APK name.
+2. Confirm `applicationId` remains `com.agentpad.app` unless a migration plan explicitly changes it.
+3. Run local checks:
 
-## Required GitHub Actions secrets
+```powershell
+cd android-app
+.\gradlew.bat --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+cd ..
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-secrets.ps1
+```
 
-- `AGENTPAD_RELEASE_KEYSTORE`: Base64-encoded JKS bytes.
-- `AGENTPAD_KEYSTORE_PASSWORD`: Keystore password.
-- `AGENTPAD_KEY_ALIAS`: Signing key alias.
-- `AGENTPAD_KEY_PASSWORD`: Private-key password.
-
-## Publishing
-
-1. Ensure `main` CI is green.
-   Run the manual `Android Instrumentation` workflow when hosted-emulator
-   diagnostics are needed; signed alpha acceptance is performed on the target
-   tablets and ARM64 phone.
-2. Confirm `versionName` equals the intended tag without the leading `v`.
-3. Create and push an annotated tag, for example `v0.2.1-alpha.1`.
-4. The read-only build job tests, lints, signs, verifies, creates the CycloneDX
-   SBOM, and uploads a temporary release bundle.
-5. A separate publish job receives `contents: write` and creates the GitHub
-   pre-release from that verified bundle.
-6. Download the APK and verify its SHA256 and signing certificate before
-   installing it on test devices.
-
-The workflow publishes prereleases only. Stable release promotion is a separate
-manual decision after real-device acceptance.
+4. Build the signed release APK when release signing env vars are available. Preferred variables are `POCKETAGENT_KEYSTORE_PATH`, `POCKETAGENT_KEYSTORE_PASSWORD`, `POCKETAGENT_KEY_ALIAS`, and `POCKETAGENT_KEY_PASSWORD`; legacy `AGENTPAD_*` variables are accepted as fallbacks.
+5. Create a GitHub release with tag `vX.Y.Z-alpha.N` and attach the APK plus checksums.

@@ -1,4 +1,4 @@
-package com.agentpad.app.data.local
+﻿package com.agentpad.app.data.local
 
 import android.content.Context
 import androidx.room.Dao
@@ -106,6 +106,50 @@ data class AuditEventEntity(
     val createdAt: Long
 )
 
+@Entity(tableName = "document_grants", indices = [Index(value = ["uri"], unique = true), Index("kind")])
+data class DocumentGrantEntity(
+    @PrimaryKey val id: String,
+    val uri: String,
+    val name: String,
+    val kind: String,
+    val createdAt: Long,
+    val lastIndexedAt: Long?
+)
+
+@Entity(
+    tableName = "document_index_entries",
+    foreignKeys = [
+        ForeignKey(
+            entity = DocumentGrantEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["grantId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("grantId"), Index(value = ["uri"], unique = true), Index("lastModified")]
+)
+data class DocumentIndexEntryEntity(
+    @PrimaryKey val id: String,
+    val grantId: String,
+    val uri: String,
+    val name: String,
+    val mimeType: String,
+    val size: Long?,
+    val lastModified: Long?,
+    val text: String,
+    val summary: String,
+    val indexedAt: Long
+)
+
+@Entity(tableName = "document_search_runs", indices = [Index("createdAt")])
+data class DocumentSearchRunEntity(
+    @PrimaryKey val id: String,
+    val query: String,
+    val stage: String,
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
 @Dao
 interface ThreadDao {
     @Query("SELECT * FROM agent_threads ORDER BY updatedAt DESC")
@@ -118,41 +162,19 @@ interface ThreadDao {
     suspend fun upsertThread(entity: AgentThreadEntity)
 
     @Query("SELECT * FROM agent_turns WHERE threadId = :threadId ORDER BY ordinal ASC")
-    fun observeTurns(threadId: String): Flow<List<AgentTurnEntity>>
-
-    @Query("SELECT * FROM agent_turns WHERE threadId = :threadId ORDER BY ordinal ASC")
     suspend fun getTurns(threadId: String): List<AgentTurnEntity>
-
-    @Query("SELECT * FROM agent_turns WHERE id = :id LIMIT 1")
-    suspend fun getTurn(id: String): AgentTurnEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertTurn(entity: AgentTurnEntity)
 
     @Query("SELECT COALESCE(MAX(ordinal), 0) FROM agent_turns WHERE threadId = :threadId")
     suspend fun maxOrdinal(threadId: String): Int
 
-    @Query(
-        """
-        UPDATE agent_turns
-        SET status = 'INTERRUPTED', updatedAt = :now
-        WHERE status IN ('PLANNING', 'RUNNING', 'VERIFYING')
-        """
-    )
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTurn(entity: AgentTurnEntity)
+
+    @Query("UPDATE agent_turns SET status = 'INTERRUPTED', updatedAt = :now WHERE status IN ('PLANNING', 'RUNNING', 'VERIFYING')")
     suspend fun interruptActiveTurns(now: Long)
 
-    @Query(
-        """
-        UPDATE agent_turns
-        SET status = 'SUPERSEDED', updatedAt = :now
-        WHERE threadId = :threadId
-          AND status IN ('DRAFT', 'AWAITING_APPROVAL', 'INTERRUPTED')
-        """
-    )
+    @Query("UPDATE agent_turns SET status = 'SUPERSEDED', updatedAt = :now WHERE threadId = :threadId AND status IN ('DRAFT', 'AWAITING_APPROVAL', 'INTERRUPTED')")
     suspend fun supersedePendingTurns(threadId: String, now: Long)
-
-    @Query("SELECT * FROM thread_messages WHERE threadId = :threadId ORDER BY createdAt ASC")
-    fun observeMessages(threadId: String): Flow<List<ThreadMessageEntity>>
 
     @Query("SELECT * FROM thread_messages WHERE threadId = :threadId ORDER BY createdAt ASC")
     suspend fun getMessages(threadId: String): List<ThreadMessageEntity>
@@ -206,19 +228,43 @@ interface ThreadDao {
 @Dao
 interface AuditDao {
     @Query("SELECT * FROM audit_events ORDER BY createdAt DESC LIMIT :limit")
-    fun observeRecent(limit: Int = 100): Flow<List<AuditEventEntity>>
-
-    @Query("SELECT * FROM audit_events ORDER BY createdAt DESC LIMIT :limit")
     suspend fun getRecent(limit: Int = 20): List<AuditEventEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: AuditEventEntity)
 
-    @Query("DELETE FROM audit_events")
-    suspend fun clear()
-
     @Query("DELETE FROM audit_events WHERE taskId IN (SELECT id FROM agent_turns WHERE threadId = :threadId)")
     suspend fun deleteForThread(threadId: String)
+}
+
+@Dao
+interface DocumentDao {
+    @Query("SELECT * FROM document_grants ORDER BY createdAt DESC")
+    suspend fun getGrants(): List<DocumentGrantEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGrant(entity: DocumentGrantEntity)
+
+    @Query("UPDATE document_grants SET lastIndexedAt = :lastIndexedAt WHERE id = :grantId")
+    suspend fun markIndexed(grantId: String, lastIndexedAt: Long)
+
+    @Query("DELETE FROM document_grants WHERE id = :grantId")
+    suspend fun deleteGrant(grantId: String)
+
+    @Query("SELECT * FROM document_index_entries ORDER BY COALESCE(lastModified, indexedAt) DESC")
+    suspend fun getIndexEntries(): List<DocumentIndexEntryEntity>
+
+    @Query("SELECT * FROM document_index_entries WHERE grantId = :grantId")
+    suspend fun getIndexEntriesForGrant(grantId: String): List<DocumentIndexEntryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertIndexEntries(entities: List<DocumentIndexEntryEntity>)
+
+    @Query("DELETE FROM document_index_entries WHERE grantId = :grantId")
+    suspend fun deleteIndexForGrant(grantId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSearchRun(entity: DocumentSearchRunEntity)
 }
 
 @Database(
@@ -227,20 +273,23 @@ interface AuditDao {
         AgentTurnEntity::class,
         ThreadMessageEntity::class,
         ThreadAttachmentEntity::class,
-        AuditEventEntity::class
+        AuditEventEntity::class,
+        DocumentGrantEntity::class,
+        DocumentIndexEntryEntity::class,
+        DocumentSearchRunEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
-abstract class AgentPadDatabase : RoomDatabase() {
+abstract class PocketAgentDatabase : RoomDatabase() {
     abstract fun threadDao(): ThreadDao
     abstract fun auditDao(): AuditDao
+    abstract fun documentDao(): DocumentDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS agent_threads (
                         id TEXT NOT NULL PRIMARY KEY,
                         title TEXT NOT NULL,
@@ -248,10 +297,8 @@ abstract class AgentPadDatabase : RoomDatabase() {
                         createdAt INTEGER NOT NULL,
                         updatedAt INTEGER NOT NULL
                     )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS agent_turns (
                         id TEXT NOT NULL PRIMARY KEY,
                         threadId TEXT NOT NULL,
@@ -265,10 +312,8 @@ abstract class AgentPadDatabase : RoomDatabase() {
                         updatedAt INTEGER NOT NULL,
                         FOREIGN KEY(threadId) REFERENCES agent_threads(id) ON DELETE CASCADE
                     )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS thread_messages (
                         id TEXT NOT NULL PRIMARY KEY,
                         threadId TEXT NOT NULL,
@@ -279,10 +324,8 @@ abstract class AgentPadDatabase : RoomDatabase() {
                         createdAt INTEGER NOT NULL,
                         FOREIGN KEY(threadId) REFERENCES agent_threads(id) ON DELETE CASCADE
                     )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS thread_attachments (
                         id TEXT NOT NULL PRIMARY KEY,
                         threadId TEXT NOT NULL,
@@ -294,21 +337,15 @@ abstract class AgentPadDatabase : RoomDatabase() {
                         createdAt INTEGER NOT NULL,
                         FOREIGN KEY(threadId) REFERENCES agent_threads(id) ON DELETE CASCADE
                     )
-                    """.trimIndent()
-                )
+                """.trimIndent())
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_agent_turns_threadId ON agent_turns(threadId)")
-                db.execSQL(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS index_agent_turns_threadId_ordinal " +
-                        "ON agent_turns(threadId, ordinal)"
-                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_agent_turns_threadId_ordinal ON agent_turns(threadId, ordinal)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_thread_messages_threadId ON thread_messages(threadId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_thread_messages_turnId ON thread_messages(turnId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_thread_attachments_threadId ON thread_attachments(threadId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_thread_attachments_turnId ON thread_attachments(turnId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_audit_events_taskId ON audit_events(taskId)")
-
-                db.execSQL(
-                    """
+                db.execSQL("""
                     INSERT INTO agent_threads (id, title, status, createdAt, updatedAt)
                     SELECT id, title,
                         CASE WHEN status = 'COMPLETED' THEN 'COMPLETED'
@@ -316,50 +353,87 @@ abstract class AgentPadDatabase : RoomDatabase() {
                              ELSE 'ACTIVE' END,
                         createdAt, updatedAt
                     FROM tasks
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     INSERT INTO agent_turns
                         (id, threadId, ordinal, title, goal, status, planJson, result, createdAt, updatedAt)
                     SELECT id, id, 1, title, goal,
-                        CASE WHEN status IN ('PLANNING', 'RUNNING', 'VERIFYING')
-                             THEN 'INTERRUPTED' ELSE status END,
+                        CASE WHEN status IN ('PLANNING', 'RUNNING', 'VERIFYING') THEN 'INTERRUPTED' ELSE status END,
                         planJson, result, createdAt, updatedAt
                     FROM tasks
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     INSERT INTO thread_messages
                         (id, threadId, turnId, role, kind, content, createdAt)
                     SELECT 'legacy-user-' || id, id, id, 'USER', 'GOAL', goal, createdAt
                     FROM tasks
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
+                """.trimIndent())
+                db.execSQL("""
                     INSERT INTO thread_messages
                         (id, threadId, turnId, role, kind, content, createdAt)
                     SELECT 'legacy-result-' || id, id, id, 'ASSISTANT', 'RESULT', result, updatedAt
                     FROM tasks WHERE result IS NOT NULL AND result != ''
-                    """.trimIndent()
-                )
+                """.trimIndent())
                 db.execSQL("DROP TABLE tasks")
             }
         }
 
-        @Volatile
-        private var instance: AgentPadDatabase? = null
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS document_grants (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        uri TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        kind TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        lastIndexedAt INTEGER
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_document_grants_uri ON document_grants(uri)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_document_grants_kind ON document_grants(kind)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS document_index_entries (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        grantId TEXT NOT NULL,
+                        uri TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        mimeType TEXT NOT NULL,
+                        size INTEGER,
+                        lastModified INTEGER,
+                        text TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        indexedAt INTEGER NOT NULL,
+                        FOREIGN KEY(grantId) REFERENCES document_grants(id) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_document_index_entries_grantId ON document_index_entries(grantId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_document_index_entries_uri ON document_index_entries(uri)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_document_index_entries_lastModified ON document_index_entries(lastModified)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS document_search_runs (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        query TEXT NOT NULL,
+                        stage TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_document_search_runs_createdAt ON document_search_runs(createdAt)")
+            }
+        }
 
-        fun get(context: Context): AgentPadDatabase =
+        @Volatile
+        private var instance: PocketAgentDatabase? = null
+
+        fun get(context: Context): PocketAgentDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
-                    AgentPadDatabase::class.java,
+                    PocketAgentDatabase::class.java,
                     "agentpad.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }

@@ -11,24 +11,24 @@ from socketserver import ThreadingMixIn
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODULE_PATH = os.path.join(ROOT, "app", "agentpad.py")
-SPEC = importlib.util.spec_from_file_location("agentpad_module", MODULE_PATH)
-agentpad = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(agentpad)
+MODULE_PATH = os.path.join(ROOT, "app", "pocketagent.py")
+SPEC = importlib.util.spec_from_file_location("pocketagent_module", MODULE_PATH)
+pocketagent = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(pocketagent)
 
 
-class AgentPadTests(unittest.TestCase):
+class PocketAgentTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.mkdtemp()
-        self.home = os.path.join(self.temp, ".agentpad")
+        self.home = os.path.join(self.temp, ".pocketagent")
         self.workspace = os.path.join(self.temp, "workspace")
         os.makedirs(self.workspace)
-        agentpad.APP_HOME = self.home
-        agentpad.CONFIG_PATH = os.path.join(self.home, "config.json")
-        agentpad.SECRETS_PATH = os.path.join(self.home, "secrets.env")
-        agentpad.SESSIONS_DIR = os.path.join(self.home, "sessions")
-        agentpad.LOGS_DIR = os.path.join(self.home, "logs")
-        self.config = agentpad.default_config()
+        pocketagent.APP_HOME = self.home
+        pocketagent.CONFIG_PATH = os.path.join(self.home, "config.json")
+        pocketagent.SECRETS_PATH = os.path.join(self.home, "secrets.env")
+        pocketagent.SESSIONS_DIR = os.path.join(self.home, "sessions")
+        pocketagent.LOGS_DIR = os.path.join(self.home, "logs")
+        self.config = pocketagent.default_config()
         self.config["workspace"] = self.workspace
 
     def tearDown(self):
@@ -36,50 +36,50 @@ class AgentPadTests(unittest.TestCase):
 
     def test_workspace_blocks_parent_escape(self):
         with self.assertRaises(ValueError):
-            agentpad.safe_workspace_path(self.config, "../secret.txt")
+            pocketagent.safe_workspace_path(self.config, "../secret.txt")
 
     def test_write_creates_backup(self):
         path = os.path.join(self.workspace, "note.txt")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write("old")
-        result = agentpad.write_file(self.config, "note.txt", "new")
+        result = pocketagent.write_file(self.config, "note.txt", "new")
         self.assertTrue(result["backup"])
         with open(path, "r", encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "new")
 
     def test_shell_is_disabled_by_default(self):
-        result = agentpad.run_command(self.config, "ls")
+        result = pocketagent.run_command(self.config, "ls")
         self.assertIn("未启用", result["error"])
 
     def test_shell_rejects_composed_command(self):
         self.config["tools"]["shellEnabled"] = True
-        result = agentpad.run_command(self.config, "ls | cat")
+        result = pocketagent.run_command(self.config, "ls | cat")
         self.assertIn("组合", result["error"])
 
     def test_shell_restricts_git_subcommands(self):
         self.config["tools"]["shellEnabled"] = True
-        result = agentpad.run_command(self.config, "git clean -fd")
+        result = pocketagent.run_command(self.config, "git clean -fd")
         self.assertIn("git 仅允许", result["error"])
 
     def test_shell_restricts_find_exec(self):
         self.config["tools"]["shellEnabled"] = True
-        result = agentpad.run_command(self.config, "find . -exec cat {} ;")
+        result = pocketagent.run_command(self.config, "find . -exec cat {} ;")
         self.assertIn("组合", result["error"])
 
     def test_secret_redaction(self):
         os.makedirs(self.home)
-        with open(agentpad.SECRETS_PATH, "w", encoding="utf-8") as handle:
-            handle.write("AGENTPAD_API_KEY=sk-super-secret-value\n")
-        self.assertNotIn("sk-super-secret-value", agentpad.redact("bad sk-super-secret-value"))
+        with open(pocketagent.SECRETS_PATH, "w", encoding="utf-8") as handle:
+            handle.write("POCKETAGENT_API_KEY=sk-super-secret-value\n")
+        self.assertNotIn("sk-super-secret-value", pocketagent.redact("bad sk-super-secret-value"))
 
     def test_api_key_file_permissions(self):
-        agentpad.save_api_key("secret-value")
+        pocketagent.save_api_key("secret-value")
         if os.name != "nt":
-            mode = stat.S_IMODE(os.stat(agentpad.SECRETS_PATH).st_mode)
+            mode = stat.S_IMODE(os.stat(pocketagent.SECRETS_PATH).st_mode)
             self.assertEqual(mode, 0o600)
 
     def test_provider_presets_are_valid(self):
-        providers = agentpad.load_providers()
+        providers = pocketagent.load_providers()
         self.assertIn("deepseek", providers)
         self.assertIn("dashscope", providers)
         for key, provider in providers.items():
@@ -87,7 +87,7 @@ class AgentPadTests(unittest.TestCase):
                 self.assertTrue(provider["endpoint"].startswith("https://"), key)
 
     def test_config_does_not_contain_api_key(self):
-        config = agentpad.default_config()
+        config = pocketagent.default_config()
         serialized = json.dumps(config)
         self.assertNotIn("apiKey", serialized)
         self.assertNotIn("API_KEY", serialized)
@@ -98,11 +98,11 @@ class AgentPadTests(unittest.TestCase):
 
     def test_remote_http_endpoint_is_rejected(self):
         with self.assertRaises(ValueError):
-            agentpad.validate_endpoint("http://example.com/v1/chat/completions")
+            pocketagent.validate_endpoint("http://example.com/v1/chat/completions")
 
     def test_report_config_excludes_endpoint_path_and_secret(self):
         self.config["endpoint"] = "https://example.com/private/chat/completions"
-        safe = agentpad.safe_config_for_report(self.config)
+        safe = pocketagent.safe_config_for_report(self.config)
         serialized = json.dumps(safe)
         self.assertEqual(safe["endpointHost"], "example.com")
         self.assertNotIn("/private/", serialized)
@@ -111,23 +111,23 @@ class AgentPadTests(unittest.TestCase):
     def test_generated_report_redacts_log_secret(self):
         self.config["endpoint"] = "https://example.com/v1/chat/completions"
         self.config["model"] = "test-model"
-        os.makedirs(agentpad.LOGS_DIR)
+        os.makedirs(pocketagent.LOGS_DIR)
         os.makedirs(self.workspace, exist_ok=True)
-        agentpad.atomic_write_json(agentpad.CONFIG_PATH, self.config)
-        agentpad.save_api_key("sk-report-secret-123456")
-        with open(os.path.join(agentpad.LOGS_DIR, "gateway.log"), "w", encoding="utf-8") as handle:
+        pocketagent.atomic_write_json(pocketagent.CONFIG_PATH, self.config)
+        pocketagent.save_api_key("sk-report-secret-123456")
+        with open(os.path.join(pocketagent.LOGS_DIR, "gateway.log"), "w", encoding="utf-8") as handle:
             handle.write("request failed with sk-report-secret-123456\n")
 
-        original_check_url = agentpad.check_url
-        original_capture = agentpad.capture_command
-        agentpad.check_url = lambda _url, timeout=8, method="HEAD": (True, "mock")
-        agentpad.capture_command = lambda _args, timeout=10: "mock"
+        original_check_url = pocketagent.check_url
+        original_capture = pocketagent.capture_command
+        pocketagent.check_url = lambda _url, timeout=8, method="HEAD": (True, "mock")
+        pocketagent.capture_command = lambda _args, timeout=10: "mock"
         report_path = os.path.join(self.temp, "report.txt")
         try:
-            agentpad.generate_report(False, report_path)
+            pocketagent.generate_report(False, report_path)
         finally:
-            agentpad.check_url = original_check_url
-            agentpad.capture_command = original_capture
+            pocketagent.check_url = original_check_url
+            pocketagent.capture_command = original_capture
 
         with open(report_path, "r", encoding="utf-8") as handle:
             report = handle.read()
@@ -177,9 +177,9 @@ class AgentPadTests(unittest.TestCase):
         try:
             self.config["endpoint"] = "http://127.0.0.1:%d/chat/completions" % server.server_port
             self.config["model"] = "fake-agent"
-            agentpad.atomic_write_json(agentpad.CONFIG_PATH, self.config)
-            agentpad.save_api_key("test-secret")
-            reply, events = agentpad.chat_once("列出文件", "integration")
+            pocketagent.atomic_write_json(pocketagent.CONFIG_PATH, self.config)
+            pocketagent.save_api_key("test-secret")
+            reply, events = pocketagent.chat_once("列出文件", "integration")
             self.assertEqual(reply, "工具调用成功")
             self.assertEqual(events[0]["tool"], "list_files")
             self.assertIn("tools", FakeModelHandler.requests[0])

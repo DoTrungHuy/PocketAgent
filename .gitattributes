@@ -1,0 +1,8 @@
+/.gitattributes text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+termux-lite/pocketagent text eol=lf
+termux-lite/install.sh text eol=lf
+termux-lite/bootstrap.sh text eol=lf
+android-app/gradlew text eol=lf
+*.bat text eol=crlf

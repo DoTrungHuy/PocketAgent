@@ -1,61 +1,57 @@
-<!doctype html>
-<html lang="zh-CN">
+﻿<!doctype html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AgentPad Agent Preview</title>
+    <title>PocketAgent Document Search Preview</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="brand">
-          <span>AP</span>
+          <span>P</span>
           <div>
-            <strong>AgentPad</strong>
-            <small>phone agent</small>
+            <strong>PocketAgent</strong>
+            <small>phone document agent</small>
           </div>
         </div>
-
-        <button class="new-chat">+ New chat</button>
-
+        <button class="new-chat" id="new-chat">+ New chat</button>
         <nav class="nav">
-          <button class="active" data-view="chat">Chat</button>
+          <button class="active" data-view="chat">Chats</button>
           <button data-view="settings">Settings</button>
         </nav>
-
-        <p class="label">Recent</p>
-        <button class="thread active">
-          <strong>新对话</strong>
-          <small>agent session</small>
-        </button>
-        <button class="thread">
-          <strong>图片分析</strong>
-          <small>已授权 2 项内容</small>
-        </button>
+        <p class="label">History</p>
+        <button class="thread active"><strong>New document search</strong><small>just now</small></button>
+        <button class="thread"><strong>Invoice amount</strong><small>3 candidate files</small></button>
+        <button class="thread"><strong>Course notes</strong><small>folder authorized</small></button>
+        <p class="scope-count">Search ranges: <span id="scope-count">0</span></p>
       </aside>
 
       <section class="main">
         <header class="topbar">
-          <div>
-            <small>Current chat</small>
-            <h1 id="title">New chat</h1>
+          <button class="icon" id="menu">☰</button>
+          <div class="mark">P</div>
+          <div class="title">
+            <strong>PocketAgent</strong>
+            <small id="subtitle">New document search</small>
           </div>
-          <span class="model">DeepSeek · deepseek-v4-flash</span>
+          <span class="model">DeepSeek</span>
+          <button class="icon" id="top-new">+</button>
         </header>
 
         <section class="view active" id="chat-view">
           <div class="messages" id="messages">
             <article class="empty-state">
-              <span>AP</span>
-              <h2>AgentPad</h2>
-              <small>Mobile agent for authorized phone content.</small>
+              <span>⌕</span>
+              <h1>Ask for a document by content</h1>
+              <p>PocketAgent will request a search range when it needs phone files.</p>
             </article>
           </div>
-
           <form class="composer" id="composer">
-            <button type="button" class="attach" id="authorize">Read</button>
-            <input id="prompt" placeholder="Message AgentPad..." />
+            <button type="button" class="secondary" id="find">Find</button>
+            <button type="button" class="secondary" id="scope">Scope</button>
+            <input id="prompt" placeholder="Find the document that mentions reimbursement amount..." />
             <button class="primary">Send</button>
           </form>
         </section>
@@ -64,22 +60,20 @@
           <div class="page">
             <div class="heading">
               <small>Settings</small>
-              <h2>Model</h2>
+              <h1>Model and privacy</h1>
             </div>
             <article class="panel">
-              <h3>Provider</h3>
+              <h2>Provider</h2>
               <div class="providers">
                 <button class="selected">DeepSeek</button>
-                <button>通义百炼</button>
+                <button>DashScope</button>
                 <button>Kimi</button>
-                <button>智谱 GLM</button>
+                <button>GLM</button>
                 <button>Custom</button>
               </div>
             </article>
             <article class="panel">
-              <h3>App</h3>
-              <label><input type="checkbox" checked /> Agent reads chat content</label>
-              <label><input type="checkbox" checked /> Agent reads images</label>
+              <h2>App</h2>
               <label><input type="checkbox" checked /> Dark theme</label>
               <label><input type="checkbox" /> Privacy mode</label>
             </article>
@@ -88,8 +82,19 @@
       </section>
     </main>
 
+    <section class="sheet" id="sheet" aria-hidden="true">
+      <div class="sheet-panel">
+        <button class="close" id="close-sheet">×</button>
+        <h2>Authorize document search</h2>
+        <p>PocketAgent needs an Android file or folder range before it can search by content.</p>
+        <button class="primary wide" id="grant-folder">Authorize a folder</button>
+        <button class="secondary wide" id="grant-files">Choose files</button>
+        <button class="secondary wide" id="search-authorized">Search authorized recent documents</button>
+      </div>
+    </section>
+
     <nav class="bottom-nav">
-      <button class="active" data-view="chat">Chat</button>
+      <button class="active" data-view="chat">Chats</button>
       <button data-view="settings">Settings</button>
     </nav>
 

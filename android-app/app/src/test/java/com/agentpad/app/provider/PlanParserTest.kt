@@ -1,4 +1,4 @@
-package com.agentpad.app.provider
+﻿package com.agentpad.app.provider
 
 import com.agentpad.app.domain.RiskLevel
 import com.agentpad.app.policy.ApprovalPolicy
@@ -12,15 +12,15 @@ class PlanParserTest {
     @Test
     fun parsesKnownToolAndUpgradesRisk() {
         val plan = parser.parse(
-            "总结文件",
+            "summarize document",
             """
                 {
-                  "title": "总结报告",
-                  "summary": "读取并总结用户选择的文件",
+                  "title": "Summarize report",
+                  "summary": "Read and summarize the authorized file",
                   "actions": [
                     {
-                      "title": "上传并总结",
-                      "description": "将文件内容发送到模型",
+                      "title": "Upload and summarize",
+                      "description": "Send document text to the model",
                       "tool": "upload_document_for_summary",
                       "arguments": {},
                       "risk": "READ_ONLY",
@@ -39,14 +39,14 @@ class PlanParserTest {
     fun rejectsUnknownTools() {
         assertThrows(IllegalArgumentException::class.java) {
             parser.parse(
-                "执行未知程序",
+                "run unknown program",
                 """
                     {
-                      "title": "危险计划",
+                      "title": "Unsafe plan",
                       "summary": "",
                       "actions": [
                         {
-                          "title": "运行",
+                          "title": "Run",
                           "description": "",
                           "tool": "download_and_execute",
                           "arguments": {},
@@ -64,14 +64,14 @@ class PlanParserTest {
     fun rejectsForbiddenTools() {
         assertThrows(IllegalArgumentException::class.java) {
             parser.parse(
-                "付款",
+                "pay money",
                 """
                     {
-                      "title": "付款",
+                      "title": "Payment",
                       "summary": "",
                       "actions": [
                         {
-                          "title": "支付",
+                          "title": "Pay",
                           "description": "",
                           "tool": "payment",
                           "arguments": {},
@@ -89,7 +89,7 @@ class PlanParserTest {
     fun rejectsMixedSafeAndUnknownTools() {
         assertThrows(IllegalArgumentException::class.java) {
             parser.parse(
-                "先检查再运行未知程序",
+                "inspect then run unknown program",
                 """
                     {
                       "actions": [
@@ -108,21 +108,21 @@ class PlanParserTest {
             """{"tool":"inspect_task","arguments":{}}"""
         }
         assertThrows(IllegalArgumentException::class.java) {
-            parser.parse("太多步骤", """{"actions":[$actions]}""")
+            parser.parse("too many steps", """{"actions":[$actions]}""")
         }
     }
 
     @Test
     fun rejectsMalformedAction() {
         assertThrows(IllegalArgumentException::class.java) {
-            parser.parse("错误格式", """{"actions":["not-an-object"]}""")
+            parser.parse("bad format", """{"actions":["not-an-object"]}""")
         }
     }
 
     @Test
     fun parsesJsonCodeFence() {
         val plan = parser.parse(
-            "检查任务",
+            "inspect task",
             """
                 ```json
                 {

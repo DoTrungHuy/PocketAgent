@@ -1,53 +1,21 @@
-# AgentPad Security Model
+﻿# PocketAgent Security Model
 
-## Local authority
+PocketAgent reads phone content only after the user grants access through Android system UI.
 
-模型不能决定自己的权限、风险级别或审批方式。`ApprovalPolicy` 根据工具和参数本地计算风险，并可将模型声明的风险升级但不能降级。
+## Boundaries
 
-## Risk levels
+- No full-phone silent scan.
+- No accessibility automation in v0.2.4.
+- No background indexing of unauthorized locations.
+- No API keys in diagnostics, logs, or exported crash reports.
+- Document content is treated as untrusted context and must not override local safety policy.
 
-| 等级 | 默认处理 | 示例 |
-| --- | --- | --- |
-| `READ_ONLY` | 可自动执行 | 读取用户已授权文件、查看应用内任务 |
-| `TASK_APPROVAL` | 整个任务批准 | 打开网页、启动应用、分享预览 |
-| `ACTION_APPROVAL` | 每一步批准 | 覆盖、删除、发送、截图上传、跨应用输入 |
-| `FORBIDDEN` | 永久拒绝 | 支付、密码、验证码、绕过锁屏、静默安装 |
+## Document search permissions
 
-审批令牌绑定任务 ID、动作 ID、参数摘要、有效期和允许次数。参数变化后旧令牌立即失效。
-新追问会作废未执行的旧计划；审批令牌不写入 Room，因此新回合、进程重启和中断恢复都必须重新审批。
+PocketAgent can search:
 
-## Secrets
+- Files selected with the Android file picker.
+- Folders selected with the Android folder picker.
+- Previously authorized ranges until the user removes them or Android revokes the URI permission.
 
-- API Key 使用 Android Keystore 中的 AES/GCM 密钥加密。
-- 普通设置只保存服务商、HTTPS endpoint 和模型名。
-- 数据库、审计记录和错误信息不得写入 API Key。
-- 备份默认排除密钥和任务敏感数据。
-
-## Prompt injection
-
-网页、通知、文件和屏幕内容全部视为不可信数据。它们不能：
-
-- 修改系统提示词；
-- 增加工具；
-- 降低审批级别；
-- 请求读取密钥；
-- 将自身内容当作开发者指令执行。
-
-## Network
-
-- 默认只允许 HTTPS。
-- `127.0.0.1`、`localhost` 和 `::1` 可由用户明确选择 HTTP。
-- 打开外部网页的工具只接受有效 HTTPS 地址。
-- 每个任务限制步骤、请求次数、时长和输出大小。
-- 响应解析只接受已知结构，未知工具名称直接拒绝。
-
-## Accessibility
-
-无障碍功能属于后续实验阶段。启用后仍禁止读取或填写密码、验证码和支付字段；锁屏或受保护窗口出现时立即暂停。
-
-## Diagnostics
-
-- 崩溃报告只保存在应用私有目录，用户主动选择位置后才导出。
-- 报告包含版本、Git SHA、设备/API、窗口宽度、最后页面、脱敏堆栈帧和审计摘要。
-- 异常消息正文不写入报告，避免泄露文件文本或完整模型输出。
-- API Key、Authorization/Bearer 凭据和常见密钥格式会在写入前脱敏。
+The Android package id remains `com.agentpad.app` for compatibility, but the product name is PocketAgent.

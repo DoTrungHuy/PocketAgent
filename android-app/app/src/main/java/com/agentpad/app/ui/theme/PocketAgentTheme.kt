@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 
 val Accent = Color(0xFF0F766E)
 val AccentDark = Color(0xFF5EEAD4)
+val SearchAmber = Color(0xFFD08700)
 val Success = Color(0xFF15803D)
 val Warning = Color(0xFFB45309)
 val Danger = Color(0xFFB91C1C)
@@ -17,13 +18,13 @@ private val LightColors = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = Color(0xFFD5F5EF),
     onPrimaryContainer = Color(0xFF073B36),
-    background = Color(0xFFF7F6F2),
-    onBackground = Color(0xFF1C1D1B),
+    background = Color(0xFFF8FAF9),
+    onBackground = Color(0xFF171D1B),
     surface = Color.White,
-    onSurface = Color(0xFF1C1D1B),
-    surfaceVariant = Color(0xFFECEAE4),
-    onSurfaceVariant = Color(0xFF5D605C),
-    outline = Color(0xFFC6C5BE),
+    onSurface = Color(0xFF171D1B),
+    surfaceVariant = Color(0xFFE8EFEC),
+    onSurfaceVariant = Color(0xFF58615E),
+    outline = Color(0xFFC3CECA),
     error = Danger
 )
 
@@ -43,7 +44,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun AgentPadTheme(
+fun PocketAgentTheme(
     darkTheme: Boolean,
     content: @Composable () -> Unit
 ) {

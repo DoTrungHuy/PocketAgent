@@ -11,7 +11,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 class SecureApiKeyStore(context: Context) {
-    private val preferences = context.getSharedPreferences("agentpad_secure", Context.MODE_PRIVATE)
+    private val preferences = context.getSharedPreferences("pocketagent_secure", Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
     fun hasKey(): Boolean = preferences.contains(KEY_CIPHERTEXT) && preferences.contains(KEY_IV)
@@ -66,7 +66,7 @@ class SecureApiKeyStore(context: Context) {
     }
 
     private companion object {
-        const val KEY_ALIAS = "agentpad_api_key_v1"
+        const val KEY_ALIAS = "pocketagent_api_key_v1"
         const val KEY_CIPHERTEXT = "api_key_ciphertext"
         const val KEY_IV = "api_key_iv"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

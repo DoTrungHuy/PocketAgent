@@ -7,12 +7,12 @@ if [ -f "$SCRIPT_DIR/install.sh" ]; then
   exec bash "$SCRIPT_DIR/install.sh" "$@"
 fi
 
-RELEASE_URL="${AGENTPAD_RELEASE_URL:-}"
-RELEASE_SHA256="${AGENTPAD_RELEASE_SHA256:-}"
+RELEASE_URL="${POCKETAGENT_RELEASE_URL:-}"
+RELEASE_SHA256="${POCKETAGENT_RELEASE_SHA256:-}"
 
 if [ -z "$RELEASE_URL" ] || [ -z "$RELEASE_SHA256" ]; then
   cat >&2 <<'EOF'
-AgentPad 尚未发布公开安装包。
+PocketAgent 尚未发布公开安装包。
 请先把完整源码目录传到平板，然后在目录内执行：
   bash install.sh
 
@@ -23,9 +23,9 @@ fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM
-archive="$tmp_dir/agentpad.tar.gz"
+archive="$tmp_dir/pocketagent.tar.gz"
 
-echo "正在下载 AgentPad 发布包..."
+echo "正在下载 PocketAgent 发布包..."
 curl --fail --location --proto '=https' --tlsv1.2 "$RELEASE_URL" -o "$archive"
 actual="$(sha256sum "$archive" | awk '{print $1}')"
 if [ "$actual" != "$RELEASE_SHA256" ]; then

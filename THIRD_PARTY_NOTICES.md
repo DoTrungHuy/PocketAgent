@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-AgentPad Native Core uses open-source Android and Kotlin libraries. The release
+PocketAgent Native Core uses open-source Android and Kotlin libraries. The release
 SBOM contains the complete resolved dependency graph and license metadata.
 
 Primary dependencies include:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AgentPad: a dependency-free, tablet-first AI agent runtime."""
+"""PocketAgent: a dependency-free, tablet-first AI agent runtime."""
 
 from __future__ import print_function
 
@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 
 
-APP_HOME = os.path.expanduser(os.environ.get("AGENTPAD_HOME", "~/.agentpad"))
+APP_HOME = os.path.expanduser(os.environ.get("POCKETAGENT_HOME", "~/.pocketagent"))
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_ROOT = os.path.dirname(APP_DIR)
 CONFIG_PATH = os.path.join(APP_HOME, "config.json")
@@ -40,7 +40,7 @@ VERSION_PATH = (
     if os.path.isfile(os.path.join(APP_DIR, "VERSION"))
     else os.path.join(SOURCE_ROOT, "VERSION")
 )
-DEFAULT_WORKSPACE = os.path.expanduser("~/AgentPadWorkspace")
+DEFAULT_WORKSPACE = os.path.expanduser("~/PocketAgentWorkspace")
 MAX_FILE_BYTES = 1024 * 1024
 MAX_TOOL_ROUNDS = 8
 DEFAULT_TIMEOUT = 120
@@ -90,7 +90,7 @@ def default_config():
         "model": "",
         "workspace": DEFAULT_WORKSPACE,
         "systemPrompt": (
-            "你是运行在安卓平板上的 AgentPad 助手。优先使用中文，回答简洁准确。"
+            "你是运行在安卓平板上的 PocketAgent 助手。优先使用中文，回答简洁准确。"
             "你只能通过提供的工具访问指定工作目录，不能假装已经执行未执行的操作。"
             "修改文件前先理解现有内容；不要访问工作目录外的文件；不要泄露密钥。"
         ),
@@ -148,7 +148,7 @@ def save_api_key(api_key):
     ensure_dirs()
     temp = SECRETS_PATH + ".tmp"
     with open(temp, "w", encoding="utf-8") as handle:
-        handle.write("AGENTPAD_API_KEY=" + api_key.replace("\n", "").replace("\r", "") + "\n")
+        handle.write("POCKETAGENT_API_KEY=" + api_key.replace("\n", "").replace("\r", "") + "\n")
     os.replace(temp, SECRETS_PATH)
     try:
         os.chmod(SECRETS_PATH, 0o600)
@@ -180,7 +180,7 @@ def configure():
     optional = [key for key in keys if not providers[key].get("mainland")]
     ordered = mainland + optional
 
-    print("\nAgentPad 模型配置（中国大陆服务优先）")
+    print("\nPocketAgent 模型配置（中国大陆服务优先）")
     print("API Key 只写入本机 %s，不写入 config.json。" % SECRETS_PATH)
     for index, key in enumerate(ordered, 1):
         marker = "" if providers[key].get("mainland") else " [可选]"
@@ -226,7 +226,7 @@ def configure():
     print("\n配置完成。")
     print("工作目录: " + config["workspace"])
     print("命令工具: " + ("已启用（仅白名单）" if config["tools"]["shellEnabled"] else "默认关闭"))
-    print("建议先运行: agentpad doctor")
+    print("建议先运行: pocketagent doctor")
 
 
 def safe_workspace_path(config, user_path):
@@ -278,9 +278,9 @@ def write_file(config, path, content):
         os.makedirs(parent)
     backup = None
     if os.path.exists(target):
-        backup = target + ".agentpad-backup-" + time.strftime("%Y%m%d-%H%M%S")
+        backup = target + ".pocketagent-backup-" + time.strftime("%Y%m%d-%H%M%S")
         shutil.copy2(target, backup)
-    temp = target + ".agentpad-tmp"
+    temp = target + ".pocketagent-tmp"
     with open(temp, "w", encoding="utf-8") as handle:
         handle.write(content)
     os.replace(temp, target)
@@ -293,7 +293,7 @@ def write_file(config, path, content):
 
 def run_command(config, command):
     if not config["tools"].get("shellEnabled"):
-        return {"error": "命令工具未启用，请重新运行 agentpad configure"}
+        return {"error": "命令工具未启用，请重新运行 pocketagent configure"}
     forbidden = (";", "&&", "||", "|", ">", "<", "`", "$(", "\n", "\r")
     if any(token in command for token in forbidden):
         return {"error": "命令包含管道、重定向或组合执行符，已拒绝"}
@@ -352,7 +352,7 @@ def tool_definitions(config):
             "type": "function",
             "function": {
                 "name": "list_files",
-                "description": "列出 AgentPad 工作目录内的文件。",
+                "description": "列出 PocketAgent 工作目录内的文件。",
                 "parameters": {
                     "type": "object",
                     "properties": {"path": {"type": "string"}},
@@ -364,7 +364,7 @@ def tool_definitions(config):
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "读取 AgentPad 工作目录内不超过 1MB 的文本文件。",
+                "description": "读取 PocketAgent 工作目录内不超过 1MB 的文本文件。",
                 "parameters": {
                     "type": "object",
                     "properties": {"path": {"type": "string"}},
@@ -376,7 +376,7 @@ def tool_definitions(config):
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "写入 AgentPad 工作目录内的文本文件；覆盖时自动备份。",
+                "description": "写入 PocketAgent 工作目录内的文本文件；覆盖时自动备份。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -456,11 +456,11 @@ def open_url(request, timeout):
 
 def request_completion(config, messages):
     secrets = load_secrets()
-    api_key = secrets.get("AGENTPAD_API_KEY", "")
+    api_key = secrets.get("POCKETAGENT_API_KEY", "")
     if not api_key:
-        raise RuntimeError("尚未配置 API Key，请运行 agentpad configure。")
+        raise RuntimeError("尚未配置 API Key，请运行 pocketagent configure。")
     if not config.get("endpoint") or not config.get("model"):
-        raise RuntimeError("模型配置不完整，请运行 agentpad configure。")
+        raise RuntimeError("模型配置不完整，请运行 pocketagent configure。")
     validate_endpoint(config["endpoint"])
 
     payload = {
@@ -477,7 +477,7 @@ def request_completion(config, messages):
         headers={
             "Authorization": "Bearer " + api_key,
             "Content-Type": "application/json",
-            "User-Agent": "AgentPad/0.1"
+            "User-Agent": "PocketAgent/0.1"
         },
         method="POST"
     )
@@ -555,7 +555,7 @@ def chat_once(user_message, session_id="default"):
 
 
 def interactive_chat():
-    print("AgentPad 终端模式。输入 /exit 退出，/reset 清空当前会话。")
+    print("PocketAgent 终端模式。输入 /exit 退出，/reset 清空当前会话。")
     while True:
         try:
             message = input("\n你> ").strip()
@@ -574,7 +574,7 @@ def interactive_chat():
             reply, events = chat_once(message, "cli")
             for event in events:
                 print("[工具] " + event["tool"])
-            print("\nAgentPad> " + reply)
+            print("\nPocketAgent> " + reply)
         except Exception as exc:
             print("错误: " + redact(str(exc)))
 
@@ -589,7 +589,7 @@ def reset_session(session_id):
 
 def check_url(url, timeout=8, method="HEAD"):
     try:
-        request = urllib.request.Request(url, method=method, headers={"User-Agent": "AgentPad/0.1"})
+        request = urllib.request.Request(url, method=method, headers={"User-Agent": "PocketAgent/0.1"})
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return True, "HTTP " + str(response.status)
     except urllib.error.HTTPError as exc:
@@ -609,7 +609,7 @@ def doctor(test_api=False):
 
     add("Python", sys.version_info >= (3, 9), sys.version.split()[0])
     add("配置文件", os.path.isfile(CONFIG_PATH), CONFIG_PATH)
-    add("密钥文件", bool(load_secrets().get("AGENTPAD_API_KEY")), SECRETS_PATH)
+    add("密钥文件", bool(load_secrets().get("POCKETAGENT_API_KEY")), SECRETS_PATH)
     workspace = os.path.expanduser(config.get("workspace", DEFAULT_WORKSPACE))
     add("工作目录", os.path.isdir(workspace), workspace)
     add("Gateway 监听", config.get("web", {}).get("host") == "127.0.0.1",
@@ -629,12 +629,12 @@ def doctor(test_api=False):
             ok, detail = check_url(endpoint_root.group(1))
             add("当前模型服务网络", ok, detail)
     else:
-        add("当前模型配置", False, "尚未运行 agentpad configure")
+        add("当前模型配置", False, "尚未运行 pocketagent configure")
 
     if test_api:
         try:
-            reply, _events = chat_once("只回复 AGENTPAD_OK，不要调用工具。", "doctor-api")
-            add("模型 API 实测", "AGENTPAD_OK" in reply.upper(), redact(reply[:120]))
+            reply, _events = chat_once("只回复 POCKETAGENT_OK，不要调用工具。", "doctor-api")
+            add("模型 API 实测", "POCKETAGENT_OK" in reply.upper(), redact(reply[:120]))
         except Exception as exc:
             add("模型 API 实测", False, redact(str(exc)))
 
@@ -680,7 +680,7 @@ def generate_report(test_api=False, output_path=None):
     if output_path:
         report_path = os.path.abspath(os.path.expanduser(output_path))
     else:
-        report_path = os.path.expanduser("~/AgentPadReport-%s.txt" % timestamp)
+        report_path = os.path.expanduser("~/PocketAgentReport-%s.txt" % timestamp)
 
     doctor_lines = []
     original_stdout = sys.stdout
@@ -719,13 +719,13 @@ def generate_report(test_api=False, output_path=None):
             device_props[prop] = value
 
     sections = [
-        "# AgentPad 实机诊断报告",
+        "# PocketAgent 实机诊断报告",
         "",
         "生成时间: %s" % time.strftime("%Y-%m-%d %H:%M:%S %z"),
         "报告版本: 1",
         "主机名摘要: %s" % hashlib.sha256(socket.gethostname().encode("utf-8")).hexdigest()[:12],
         "",
-        "## AgentPad",
+        "## PocketAgent",
         "版本: %s" % capture_command([sys.executable, os.path.abspath(__file__), "version"]),
         "Python: %s" % sys.version.replace("\n", " "),
         "程序目录: %s" % APP_DIR,
@@ -745,7 +745,7 @@ def generate_report(test_api=False, output_path=None):
         "",
         "## 脱敏配置",
         json.dumps(safe_config_for_report(config), ensure_ascii=False, indent=2),
-        "密钥文件存在: %s" % ("是" if load_secrets().get("AGENTPAD_API_KEY") else "否"),
+        "密钥文件存在: %s" % ("是" if load_secrets().get("POCKETAGENT_API_KEY") else "否"),
         "",
         "## Doctor",
         redact("".join(doctor_lines).strip()),
@@ -786,8 +786,8 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
-class AgentPadHandler(BaseHTTPRequestHandler):
-    server_version = "AgentPad/0.1"
+class PocketAgentHandler(BaseHTTPRequestHandler):
+    server_version = "PocketAgent/0.1"
 
     def log_message(self, format_string, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), format_string % args))
@@ -851,7 +851,7 @@ class AgentPadHandler(BaseHTTPRequestHandler):
                 return
             self.send_error(404)
         except Exception as exc:
-            sys.stderr.write("AgentPad request error: %s\n" % redact(str(exc)))
+            sys.stderr.write("PocketAgent request error: %s\n" % redact(str(exc)))
             self.send_json({"ok": False, "error": redact(str(exc))}, 500)
 
 
@@ -861,8 +861,8 @@ def serve():
     port = int(config.get("web", {}).get("port", 8765))
     if host != "127.0.0.1":
         raise RuntimeError("首版为安全起见只允许监听 127.0.0.1。")
-    server = ThreadedHTTPServer((host, port), AgentPadHandler)
-    print("AgentPad Web UI: http://%s:%d" % (host, port))
+    server = ThreadedHTTPServer((host, port), PocketAgentHandler)
+    print("PocketAgent Web UI: http://%s:%d" % (host, port))
     server.serve_forever()
 
 
@@ -875,7 +875,7 @@ def print_version():
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="AgentPad 平板原生轻量 AI Agent")
+    parser = argparse.ArgumentParser(description="PocketAgent 平板原生轻量 AI Agent")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("configure", help="配置模型、工作目录与工具权限")
     sub.add_parser("chat", help="启动终端对话")

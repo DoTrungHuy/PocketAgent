@@ -1,4 +1,4 @@
-package com.agentpad.app.domain
+﻿package com.agentpad.app.domain
 
 import java.util.UUID
 
@@ -69,6 +69,28 @@ enum class AgentErrorKind {
     LOCAL_FAILURE
 }
 
+enum class DocumentGrantKind {
+    FILE,
+    TREE
+}
+
+enum class DocumentSearchStage {
+    WAITING_FOR_SCOPE,
+    INDEXING,
+    SEARCHING_RECENT,
+    UNDERSTANDING,
+    NEEDS_BROADER_SCOPE,
+    COMPLETED,
+    FAILED
+}
+
+enum class DocumentAccessAction {
+    SEARCH_AUTHORIZED,
+    PICK_FILES,
+    PICK_FOLDER,
+    EXPAND_SCOPE
+}
+
 data class ProviderPreset(
     val id: String,
     val name: String,
@@ -94,7 +116,7 @@ data class TaskPlan(
     val title: String,
     val summary: String,
     val actions: List<PlannedAction>,
-    val stopCondition: String = "目标完成、用户取消、达到限制或出现无法安全处理的错误",
+    val stopCondition: String = "Goal completed, user cancelled, limit reached, or unsafe request detected.",
     val maxSteps: Int = 8,
     val createdAt: Long = System.currentTimeMillis()
 ) {
@@ -149,7 +171,7 @@ object ProviderPresets {
         ),
         ProviderPreset(
             id = "dashscope",
-            name = "阿里云百炼 / 通义",
+            name = "Alibaba DashScope",
             endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             defaultModel = "qwen-plus"
         ),
@@ -161,37 +183,37 @@ object ProviderPresets {
         ),
         ProviderPreset(
             id = "zhipu",
-            name = "智谱 GLM",
+            name = "Zhipu GLM",
             endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions",
             defaultModel = "glm-5.1"
         ),
         ProviderPreset(
             id = "minimax",
-            name = "MiniMax 中国大陆",
+            name = "MiniMax",
             endpoint = "https://api.minimaxi.com/v1/chat/completions",
             defaultModel = "MiniMax-M2.7"
         ),
         ProviderPreset(
             id = "siliconflow",
-            name = "硅基流动 SiliconFlow",
+            name = "SiliconFlow",
             endpoint = "https://api.siliconflow.cn/v1/chat/completions",
             defaultModel = ""
         ),
         ProviderPreset(
             id = "volcengine",
-            name = "火山方舟 / 豆包",
+            name = "Volcengine Ark",
             endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
             defaultModel = "doubao-seed-2-0-lite-260215"
         ),
         ProviderPreset(
             id = "qianfan",
-            name = "百度智能云千帆",
+            name = "Baidu Qianfan",
             endpoint = "https://qianfan.baidubce.com/v2/chat/completions",
             defaultModel = ""
         ),
         ProviderPreset(
             id = "custom",
-            name = "自定义 OpenAI-compatible",
+            name = "Custom OpenAI-compatible",
             endpoint = "",
             defaultModel = "",
             mainland = false,
@@ -241,6 +263,43 @@ data class ThreadAttachment(
     val mimeType: String,
     val size: Long?,
     val createdAt: Long = System.currentTimeMillis()
+)
+
+data class DocumentGrant(
+    val id: String = UUID.randomUUID().toString(),
+    val uri: String,
+    val name: String,
+    val kind: DocumentGrantKind,
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastIndexedAt: Long? = null
+)
+
+data class DocumentIndexEntry(
+    val id: String = UUID.randomUUID().toString(),
+    val grantId: String,
+    val uri: String,
+    val name: String,
+    val mimeType: String,
+    val size: Long?,
+    val lastModified: Long?,
+    val text: String,
+    val summary: String,
+    val indexedAt: Long = System.currentTimeMillis()
+)
+
+data class DocumentSearchResult(
+    val entry: DocumentIndexEntry,
+    val score: Double,
+    val reason: String,
+    val snippet: String
+)
+
+data class DocumentSearchRequest(
+    val query: String,
+    val stage: DocumentSearchStage,
+    val requestedAction: DocumentAccessAction? = null,
+    val message: String = "",
+    val results: List<DocumentSearchResult> = emptyList()
 )
 
 data class ThreadSnapshot(

@@ -1,10 +1,10 @@
-package com.agentpad.app.data
+﻿package com.agentpad.app.data
 
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.agentpad.app.data.local.AgentPadDatabase
+import com.agentpad.app.data.local.PocketAgentDatabase
 import com.agentpad.app.domain.PlannedAction
 import com.agentpad.app.domain.RiskLevel
 import com.agentpad.app.domain.TaskPlan
@@ -19,17 +19,17 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class AgentPadRepositoryTest {
-    private lateinit var database: AgentPadDatabase
-    private lateinit var repository: AgentPadRepository
+class PocketAgentRepositoryTest {
+    private lateinit var database: PocketAgentDatabase
+    private lateinit var repository: PocketAgentRepository
 
     @Before
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, AgentPadDatabase::class.java)
+        database = Room.inMemoryDatabaseBuilder(context, PocketAgentDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repository = AgentPadRepository(database.threadDao(), database.auditDao())
+        repository = PocketAgentRepository(database.threadDao(), database.auditDao(), database.documentDao())
     }
 
     @After
@@ -39,10 +39,10 @@ class AgentPadRepositoryTest {
 
     @Test
     fun followUpSupersedesUnexecutedPlanAndCreatesImmutableNextTurn() = runBlocking {
-        val first = repository.beginTurn(null, "第一回合", null)
-        repository.savePlan(first, plan("plan-1", "第一回合"))
+        val first = repository.beginTurn(null, "first turn", null)
+        repository.savePlan(first, plan("plan-1", "first turn"))
 
-        val second = repository.beginTurn(first.threadId, "继续追问", null)
+        val second = repository.beginTurn(first.threadId, "follow up", null)
         val snapshot = requireNotNull(repository.loadThread(first.threadId))
 
         assertEquals(listOf(1, 2), snapshot.turns.map { it.ordinal })
@@ -53,31 +53,9 @@ class AgentPadRepositoryTest {
 
     @Test
     fun deletingThreadReleasesOnlyUrisNoLongerUsedByAnotherThread() = runBlocking {
-        val sharedUri = "content://agentpad/shared"
-        val first = repository.beginTurn(
-            null,
-            "线程一",
-            ThreadAttachment(
-                threadId = "",
-                turnId = null,
-                uri = sharedUri,
-                name = "shared.txt",
-                mimeType = "text/plain",
-                size = 12
-            )
-        )
-        val second = repository.beginTurn(
-            null,
-            "线程二",
-            ThreadAttachment(
-                threadId = "",
-                turnId = null,
-                uri = sharedUri,
-                name = "shared.txt",
-                mimeType = "text/plain",
-                size = 12
-            )
-        )
+        val sharedUri = "content://pocketagent/shared"
+        val first = repository.beginTurn(null, "thread one", attachment(sharedUri))
+        val second = repository.beginTurn(null, "thread two", attachment(sharedUri))
 
         assertTrue(repository.deleteThread(first.threadId).isEmpty())
         assertEquals(sharedUri, repository.deleteThread(second.threadId).single().uri)
@@ -85,8 +63,8 @@ class AgentPadRepositoryTest {
 
     @Test
     fun startupRecoveryMarksActiveTurnInterrupted() = runBlocking {
-        val turn = repository.beginTurn(null, "恢复测试", null)
-        val planned = repository.savePlan(turn, plan("plan-recovery", "恢复测试"))
+        val turn = repository.beginTurn(null, "recovery", null)
+        val planned = repository.savePlan(turn, plan("plan-recovery", "recovery"))
         repository.updateStatus(planned, TurnStatus.RUNNING)
 
         repository.interruptActiveTurns()
@@ -95,15 +73,24 @@ class AgentPadRepositoryTest {
         assertEquals(TurnStatus.INTERRUPTED, recovered.status)
     }
 
+    private fun attachment(uri: String) = ThreadAttachment(
+        threadId = "",
+        turnId = null,
+        uri = uri,
+        name = "shared.txt",
+        mimeType = "text/plain",
+        size = 12
+    )
+
     private fun plan(id: String, goal: String) = TaskPlan(
         id = id,
         goal = goal,
         title = goal,
-        summary = "摘要",
+        summary = "summary",
         actions = listOf(
             PlannedAction(
-                title = "检查",
-                description = "检查任务",
+                title = "Inspect",
+                description = "Inspect task",
                 tool = "inspect_task",
                 risk = RiskLevel.READ_ONLY,
                 reversible = true

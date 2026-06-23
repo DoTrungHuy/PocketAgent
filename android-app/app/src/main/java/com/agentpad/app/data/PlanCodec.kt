@@ -1,4 +1,4 @@
-package com.agentpad.app.data
+﻿package com.agentpad.app.data
 
 import com.agentpad.app.domain.PlannedAction
 import com.agentpad.app.domain.RiskLevel
@@ -65,10 +65,7 @@ object PlanCodec {
                 title = root.getString("title"),
                 summary = root.optString("summary"),
                 actions = actions,
-                stopCondition = root.optString(
-                    "stopCondition",
-                    "目标完成、用户取消、达到限制或出现无法安全处理的错误"
-                ),
+                stopCondition = root.optString("stopCondition", "Goal completed, user cancelled, or unsafe request detected."),
                 maxSteps = root.optInt("maxSteps", 8),
                 createdAt = root.optLong("createdAt", System.currentTimeMillis())
             )

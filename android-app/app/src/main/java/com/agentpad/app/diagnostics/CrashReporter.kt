@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 class CrashReporter(private val context: Context) {
     private val reportFile = context.filesDir.resolve("diagnostics/last_crash.json")
-    private val state = context.getSharedPreferences("agentpad_diagnostics", Context.MODE_PRIVATE)
+    private val state = context.getSharedPreferences("pocketagent_diagnostics", Context.MODE_PRIVATE)
     private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
     fun install() {

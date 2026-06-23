@@ -1,4 +1,4 @@
-package com.agentpad.app.data.local
+﻿package com.agentpad.app.data.local
 
 import android.content.Context
 import androidx.room.Room
@@ -11,9 +11,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class Migration1To2Test {
+class Migration1To3Test {
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val databaseName = "migration-1-2-test.db"
+    private val databaseName = "migration-1-3-test.db"
 
     @Before
     fun createVersionOneDatabase() {
@@ -50,7 +50,7 @@ class Migration1To2Test {
                 INSERT INTO tasks
                     (id, title, goal, status, planJson, result, createdAt, updatedAt)
                 VALUES
-                    ('task-1', '旧任务', '继续旧任务', 'RUNNING', '', '旧结果', 100, 200)
+                    ('task-1', 'old task', 'continue old task', 'RUNNING', '', 'old result', 100, 200)
                 """.trimIndent()
             )
             database.execSQL(
@@ -58,7 +58,7 @@ class Migration1To2Test {
                 INSERT INTO audit_events
                     (id, taskId, actionId, eventType, summary, createdAt)
                 VALUES
-                    ('audit-1', 'task-1', NULL, 'STATUS_CHANGED', '旧审计', 150)
+                    ('audit-1', 'task-1', NULL, 'STATUS_CHANGED', 'old audit', 150)
                 """.trimIndent()
             )
             database.version = 1
@@ -71,31 +71,25 @@ class Migration1To2Test {
     }
 
     @Test
-    fun migrationPreservesTaskResultAndAuditWhileInterruptingActiveWork() {
-        val room = Room.databaseBuilder(context, AgentPadDatabase::class.java, databaseName)
-            .addMigrations(AgentPadDatabase.MIGRATION_1_2)
+    fun migrationPreservesOldThreadsAndCreatesDocumentSearchTables() {
+        val room = Room.databaseBuilder(context, PocketAgentDatabase::class.java, databaseName)
+            .addMigrations(PocketAgentDatabase.MIGRATION_1_2, PocketAgentDatabase.MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
-        room.openHelper.writableDatabase.query(
-            "SELECT title, status FROM agent_threads WHERE id = 'task-1'"
-        ).use { cursor ->
+        room.openHelper.writableDatabase.query("SELECT title, status FROM agent_threads WHERE id = 'task-1'").use { cursor ->
             cursor.moveToFirst()
-            assertEquals("旧任务", cursor.getString(0))
+            assertEquals("old task", cursor.getString(0))
             assertEquals("ACTIVE", cursor.getString(1))
         }
-        room.openHelper.writableDatabase.query(
-            "SELECT goal, status, result FROM agent_turns WHERE id = 'task-1'"
-        ).use { cursor ->
+        room.openHelper.writableDatabase.query("SELECT goal, status, result FROM agent_turns WHERE id = 'task-1'").use { cursor ->
             cursor.moveToFirst()
-            assertEquals("继续旧任务", cursor.getString(0))
+            assertEquals("continue old task", cursor.getString(0))
             assertEquals("INTERRUPTED", cursor.getString(1))
-            assertEquals("旧结果", cursor.getString(2))
+            assertEquals("old result", cursor.getString(2))
         }
-        room.openHelper.writableDatabase.query(
-            "SELECT summary FROM audit_events WHERE id = 'audit-1'"
-        ).use { cursor ->
+        room.openHelper.writableDatabase.query("SELECT COUNT(*) FROM document_grants").use { cursor ->
             cursor.moveToFirst()
-            assertEquals("旧审计", cursor.getString(0))
+            assertEquals(0, cursor.getInt(0))
         }
         room.close()
     }

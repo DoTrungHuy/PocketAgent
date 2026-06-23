@@ -1,4 +1,4 @@
-package com.agentpad.app.ui
+﻿package com.agentpad.app.ui
 
 import android.content.Context
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -35,8 +35,8 @@ class CompactWorkspaceTest {
         SecureApiKeyStore(context).save("test-key-for-compose-render")
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeRule.onNodeWithText("AgentPad").assertExists()
-            composeRule.onNodeWithText("DeepSeek · deepseek-chat", substring = true).assertExists()
+            composeRule.onNodeWithText("PocketAgent").assertExists()
+            composeRule.onNodeWithText("DeepSeek", substring = true).assertExists()
         }
     }
 }

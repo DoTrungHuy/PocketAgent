@@ -1,14 +1,22 @@
-package com.agentpad.app.data
+﻿package com.agentpad.app.data
 
 import com.agentpad.app.data.local.AgentThreadEntity
 import com.agentpad.app.data.local.AgentTurnEntity
 import com.agentpad.app.data.local.AuditDao
 import com.agentpad.app.data.local.AuditEventEntity
+import com.agentpad.app.data.local.DocumentDao
+import com.agentpad.app.data.local.DocumentGrantEntity
+import com.agentpad.app.data.local.DocumentIndexEntryEntity
+import com.agentpad.app.data.local.DocumentSearchRunEntity
 import com.agentpad.app.data.local.ThreadAttachmentEntity
 import com.agentpad.app.data.local.ThreadDao
 import com.agentpad.app.data.local.ThreadMessageEntity
 import com.agentpad.app.domain.AgentThread
 import com.agentpad.app.domain.AgentTurn
+import com.agentpad.app.domain.DocumentGrant
+import com.agentpad.app.domain.DocumentGrantKind
+import com.agentpad.app.domain.DocumentIndexEntry
+import com.agentpad.app.domain.DocumentSearchStage
 import com.agentpad.app.domain.MessageKind
 import com.agentpad.app.domain.MessageRole
 import com.agentpad.app.domain.TaskPlan
@@ -21,9 +29,10 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class AgentPadRepository(
+class PocketAgentRepository(
     private val threadDao: ThreadDao,
-    private val auditDao: AuditDao
+    private val auditDao: AuditDao,
+    private val documentDao: DocumentDao? = null
 ) {
     fun observeThreads(): Flow<List<AgentThread>> = threadDao.observeAll().map { entities ->
         entities.map { it.toDomain() }
@@ -47,57 +56,28 @@ class AgentPadRepository(
         threadId: String?,
         goal: String,
         attachment: ThreadAttachment?
-    ): AgentTurn {
-        val now = System.currentTimeMillis()
-        val resolvedThreadId = threadId ?: UUID.randomUUID().toString()
-        val newThread = if (threadId == null) {
-            AgentThreadEntity(
-                id = resolvedThreadId,
-                title = goal.lineSequence().firstOrNull().orEmpty().take(80).ifBlank { "新任务" },
-                status = ThreadStatus.ACTIVE.name,
-                createdAt = now,
-                updatedAt = now
-            )
-        } else {
-            null
-        }
-        val turn = AgentTurn(
-            threadId = resolvedThreadId,
-            ordinal = 0,
-            goal = goal,
-            plan = null,
-            status = TurnStatus.PLANNING,
-            result = null,
-            createdAt = now,
-            updatedAt = now
-        )
-        val stored = threadDao.insertTurnBundle(
-            newThread = newThread,
-            turn = turn.toEntity(title = goal.take(80)),
-            message = ThreadMessage(
-                threadId = resolvedThreadId,
-                turnId = turn.id,
-                role = MessageRole.USER,
-                kind = MessageKind.GOAL,
-                content = goal,
-                createdAt = now
-            ).toEntity(),
-            attachment = attachment
-                ?.copy(threadId = resolvedThreadId, turnId = turn.id)
-                ?.toEntity(),
-            now = now
-        )
-        return stored.toDomain()
-    }
+    ): AgentTurn = beginTurnInternal(threadId, goal, TurnStatus.PLANNING, attachment, titleFallback = "New task")
 
     suspend fun beginChatTurn(
         threadId: String?,
         prompt: String,
         attachment: ThreadAttachment?
     ): AgentTurn {
+        val stored = beginTurnInternal(threadId, prompt, TurnStatus.RUNNING, attachment, titleFallback = "New chat")
+        audit(stored.id, null, "CHAT_STARTED", "Chat request started")
+        return stored
+    }
+
+    private suspend fun beginTurnInternal(
+        threadId: String?,
+        goal: String,
+        status: TurnStatus,
+        attachment: ThreadAttachment?,
+        titleFallback: String
+    ): AgentTurn {
         val now = System.currentTimeMillis()
         val resolvedThreadId = threadId ?: UUID.randomUUID().toString()
-        val title = prompt.lineSequence().firstOrNull().orEmpty().take(80).ifBlank { "新对话" }
+        val title = goal.lineSequence().firstOrNull().orEmpty().take(80).ifBlank { titleFallback }
         val newThread = if (threadId == null) {
             AgentThreadEntity(
                 id = resolvedThreadId,
@@ -112,9 +92,9 @@ class AgentPadRepository(
         val turn = AgentTurn(
             threadId = resolvedThreadId,
             ordinal = 0,
-            goal = prompt,
+            goal = goal,
             plan = null,
-            status = TurnStatus.RUNNING,
+            status = status,
             result = null,
             createdAt = now,
             updatedAt = now
@@ -127,25 +107,18 @@ class AgentPadRepository(
                 turnId = turn.id,
                 role = MessageRole.USER,
                 kind = MessageKind.GOAL,
-                content = prompt,
+                content = goal,
                 createdAt = now
             ).toEntity(),
-            attachment = attachment
-                ?.copy(threadId = resolvedThreadId, turnId = turn.id)
-                ?.toEntity(),
+            attachment = attachment?.copy(threadId = resolvedThreadId, turnId = turn.id)?.toEntity(),
             now = now
         )
-        audit(stored.id, null, "CHAT_STARTED", "聊天请求已发送")
         return stored.toDomain()
     }
 
     suspend fun completeChatTurn(turn: AgentTurn, reply: String): AgentTurn {
         val now = System.currentTimeMillis()
-        val updated = turn.copy(
-            status = TurnStatus.COMPLETED,
-            result = reply,
-            updatedAt = now
-        )
+        val updated = turn.copy(status = TurnStatus.COMPLETED, result = reply, updatedAt = now)
         threadDao.upsertTurn(updated.toEntity(turn.goal.take(80)))
         threadDao.insertMessage(
             ThreadMessage(
@@ -158,17 +131,13 @@ class AgentPadRepository(
             ).toEntity()
         )
         threadDao.touchThread(turn.threadId, ThreadStatus.ACTIVE.name, now)
-        audit(turn.id, null, "CHAT_COMPLETED", "聊天回复已保存")
+        audit(turn.id, null, "CHAT_COMPLETED", "Chat reply saved")
         return updated
     }
 
     suspend fun failChatTurn(turn: AgentTurn, error: String): AgentTurn {
         val now = System.currentTimeMillis()
-        val updated = turn.copy(
-            status = TurnStatus.FAILED,
-            result = error,
-            updatedAt = now
-        )
+        val updated = turn.copy(status = TurnStatus.FAILED, result = error, updatedAt = now)
         threadDao.upsertTurn(updated.toEntity(turn.goal.take(80)))
         threadDao.touchThread(turn.threadId, ThreadStatus.ACTIVE.name, now)
         audit(turn.id, null, "CHAT_FAILED", error)
@@ -177,11 +146,7 @@ class AgentPadRepository(
 
     suspend fun savePlan(turn: AgentTurn, plan: TaskPlan): AgentTurn {
         val now = System.currentTimeMillis()
-        val updated = turn.copy(
-            plan = plan,
-            status = TurnStatus.AWAITING_APPROVAL,
-            updatedAt = now
-        )
+        val updated = turn.copy(plan = plan, status = TurnStatus.AWAITING_APPROVAL, updatedAt = now)
         threadDao.upsertTurn(updated.toEntity(plan.title))
         threadDao.insertMessage(
             ThreadMessage(
@@ -194,21 +159,13 @@ class AgentPadRepository(
             ).toEntity()
         )
         threadDao.touchThread(turn.threadId, ThreadStatus.ACTIVE.name, now)
-        audit(turn.id, null, "PLAN_CREATED", "任务计划已生成，共 ${plan.actions.size} 步")
+        audit(turn.id, null, "PLAN_CREATED", "Task plan created with ${plan.actions.size} actions")
         return updated
     }
 
-    suspend fun updateStatus(
-        turn: AgentTurn,
-        status: TurnStatus,
-        result: String? = null
-    ): AgentTurn {
+    suspend fun updateStatus(turn: AgentTurn, status: TurnStatus, result: String? = null): AgentTurn {
         val now = System.currentTimeMillis()
-        val updated = turn.copy(
-            status = status,
-            result = result ?: turn.result,
-            updatedAt = now
-        )
+        val updated = turn.copy(status = status, result = result ?: turn.result, updatedAt = now)
         threadDao.upsertTurn(updated.toEntity(turn.plan?.title ?: turn.goal.take(80)))
         if (!result.isNullOrBlank()) {
             threadDao.insertMessage(
@@ -228,7 +185,7 @@ class AgentPadRepository(
             else -> ThreadStatus.ACTIVE
         }
         threadDao.touchThread(turn.threadId, threadStatus.name, now)
-        audit(turn.id, null, "STATUS_CHANGED", "任务状态变更为 ${status.name}")
+        audit(turn.id, null, "STATUS_CHANGED", "Status changed to ${status.name}")
         return updated
     }
 
@@ -272,20 +229,13 @@ class AgentPadRepository(
         val attachments = threadDao.getAttachments(threadId).map { it.toDomain() }
         auditDao.deleteForThread(threadId)
         threadDao.deleteThread(threadId)
-        return attachments
-            .distinctBy { it.uri }
-            .filter { threadDao.countAttachmentsByUri(it.uri) == 0 }
+        return attachments.distinctBy { it.uri }.filter { threadDao.countAttachmentsByUri(it.uri) == 0 }
     }
 
     suspend fun recentAuditSummaries(limit: Int = 20): List<String> =
         auditDao.getRecent(limit).map { "${it.eventType}: ${it.summary}" }
 
-    suspend fun audit(
-        taskId: String,
-        actionId: String?,
-        eventType: String,
-        summary: String
-    ) {
+    suspend fun audit(taskId: String, actionId: String?, eventType: String, summary: String) {
         auditDao.insert(
             AuditEventEntity(
                 id = UUID.randomUUID().toString(),
@@ -297,6 +247,48 @@ class AgentPadRepository(
             )
         )
     }
+
+    suspend fun loadDocumentGrants(): List<DocumentGrant> =
+        requireDocumentDao().getGrants().map { it.toDomain() }
+
+    suspend fun saveDocumentGrant(grant: DocumentGrant): DocumentGrant {
+        requireDocumentDao().upsertGrant(grant.toEntity())
+        return grant
+    }
+
+    suspend fun removeDocumentGrant(grantId: String): DocumentGrant? {
+        val grant = loadDocumentGrants().firstOrNull { it.id == grantId } ?: return null
+        requireDocumentDao().deleteGrant(grantId)
+        return grant
+    }
+
+    suspend fun loadDocumentIndex(): List<DocumentIndexEntry> =
+        requireDocumentDao().getIndexEntries().map { it.toDomain() }
+
+    suspend fun replaceDocumentIndex(grantId: String, entries: List<DocumentIndexEntry>) {
+        val dao = requireDocumentDao()
+        dao.deleteIndexForGrant(grantId)
+        if (entries.isNotEmpty()) {
+            dao.upsertIndexEntries(entries.map { it.toEntity() })
+        }
+        dao.markIndexed(grantId, System.currentTimeMillis())
+    }
+
+    suspend fun recordDocumentSearch(query: String, stage: DocumentSearchStage) {
+        val now = System.currentTimeMillis()
+        requireDocumentDao().upsertSearchRun(
+            DocumentSearchRunEntity(
+                id = UUID.randomUUID().toString(),
+                query = query,
+                stage = stage.name,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+    }
+
+    private fun requireDocumentDao(): DocumentDao =
+        documentDao ?: error("Document search storage is not configured")
 
     private fun AgentThreadEntity.toDomain() = AgentThread(
         id = id,
@@ -339,6 +331,28 @@ class AgentPadRepository(
         createdAt = createdAt
     )
 
+    private fun DocumentGrantEntity.toDomain() = DocumentGrant(
+        id = id,
+        uri = uri,
+        name = name,
+        kind = DocumentGrantKind.valueOf(kind),
+        createdAt = createdAt,
+        lastIndexedAt = lastIndexedAt
+    )
+
+    private fun DocumentIndexEntryEntity.toDomain() = DocumentIndexEntry(
+        id = id,
+        grantId = grantId,
+        uri = uri,
+        name = name,
+        mimeType = mimeType,
+        size = size,
+        lastModified = lastModified,
+        text = text,
+        summary = summary,
+        indexedAt = indexedAt
+    )
+
     private fun AgentTurn.toEntity(title: String) = AgentTurnEntity(
         id = id,
         threadId = threadId,
@@ -371,5 +385,27 @@ class AgentPadRepository(
         mimeType = mimeType,
         size = size,
         createdAt = createdAt
+    )
+
+    private fun DocumentGrant.toEntity() = DocumentGrantEntity(
+        id = id,
+        uri = uri,
+        name = name,
+        kind = kind.name,
+        createdAt = createdAt,
+        lastIndexedAt = lastIndexedAt
+    )
+
+    private fun DocumentIndexEntry.toEntity() = DocumentIndexEntryEntity(
+        id = id,
+        grantId = grantId,
+        uri = uri,
+        name = name,
+        mimeType = mimeType,
+        size = size,
+        lastModified = lastModified,
+        text = text,
+        summary = summary,
+        indexedAt = indexedAt
     )
 }

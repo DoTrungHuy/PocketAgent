@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>AgentPad</title>
+  <title>PocketAgent</title>
   <style>
     :root {
       color-scheme: light;
@@ -77,11 +77,11 @@
 <body>
   <main class="app">
     <header>
-      <h1>AgentPad</h1>
+      <h1>PocketAgent</h1>
       <div id="status">正在读取本机状态...</div>
     </header>
     <section id="messages">
-      <div class="message"><div class="meta">AgentPad</div>这是运行在平板本机的轻量 Agent。它默认只能访问 AgentPad 工作目录。</div>
+      <div class="message"><div class="meta">PocketAgent</div>这是运行在平板本机的轻量 Agent。它默认只能访问 PocketAgent 工作目录。</div>
     </section>
     <form id="form">
       <textarea id="input" placeholder="输入任务，Ctrl/Command + Enter 发送" required></textarea>
@@ -133,7 +133,7 @@
           tool.textContent = `已调用工具：${event.tool}`;
           messages.append(tool);
         }
-        addMessage("AgentPad", data.reply || "模型没有返回文本。");
+        addMessage("PocketAgent", data.reply || "模型没有返回文本。");
       } catch (error) {
         addMessage("系统", "错误：" + error.message);
       } finally {
