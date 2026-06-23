@@ -163,11 +163,17 @@ interface ThreadDao {
     @Query("SELECT * FROM thread_attachments WHERE threadId = :threadId ORDER BY createdAt ASC")
     suspend fun getAttachments(threadId: String): List<ThreadAttachmentEntity>
 
+    @Query("SELECT * FROM thread_attachments WHERE id = :attachmentId LIMIT 1")
+    suspend fun getAttachment(attachmentId: String): ThreadAttachmentEntity?
+
     @Query("SELECT COUNT(*) FROM thread_attachments WHERE uri = :uri")
     suspend fun countAttachmentsByUri(uri: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttachment(entity: ThreadAttachmentEntity)
+
+    @Query("DELETE FROM thread_attachments WHERE id = :attachmentId")
+    suspend fun deleteAttachment(attachmentId: String)
 
     @Query("UPDATE agent_threads SET updatedAt = :now, status = :status WHERE id = :threadId")
     suspend fun touchThread(threadId: String, status: String, now: Long)

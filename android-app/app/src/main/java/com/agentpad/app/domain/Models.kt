@@ -58,6 +58,26 @@ enum class CapabilityState {
     UNAVAILABLE
 }
 
+enum class AgentErrorKind {
+    NONE,
+    RATE_LIMITED,
+    NETWORK_TIMEOUT,
+    PROVIDER_RETRYABLE,
+    PROVIDER_REJECTED,
+    INVALID_RESPONSE,
+    CANCELLED_BY_USER,
+    LOCAL_FAILURE
+}
+
+data class ProviderPreset(
+    val id: String,
+    val name: String,
+    val endpoint: String,
+    val defaultModel: String,
+    val mainland: Boolean = true,
+    val supportsStreaming: Boolean = true
+)
+
 data class PlannedAction(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
@@ -113,10 +133,74 @@ data class CapabilityDescriptor(
 data class ProviderSettings(
     val providerId: String = "deepseek",
     val endpoint: String = "https://api.deepseek.com/chat/completions",
-    val model: String = "",
+    val model: String = "deepseek-v4-flash",
+    val streamingEnabled: Boolean = false,
     val visionEndpoint: String = "",
     val visionModel: String = ""
 )
+
+object ProviderPresets {
+    val all = listOf(
+        ProviderPreset(
+            id = "deepseek",
+            name = "DeepSeek",
+            endpoint = "https://api.deepseek.com/chat/completions",
+            defaultModel = "deepseek-v4-flash"
+        ),
+        ProviderPreset(
+            id = "dashscope",
+            name = "阿里云百炼 / 通义",
+            endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            defaultModel = "qwen-plus"
+        ),
+        ProviderPreset(
+            id = "moonshot",
+            name = "Kimi / Moonshot",
+            endpoint = "https://api.moonshot.cn/v1/chat/completions",
+            defaultModel = "kimi-k2.5"
+        ),
+        ProviderPreset(
+            id = "zhipu",
+            name = "智谱 GLM",
+            endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            defaultModel = "glm-5.1"
+        ),
+        ProviderPreset(
+            id = "minimax",
+            name = "MiniMax 中国大陆",
+            endpoint = "https://api.minimaxi.com/v1/chat/completions",
+            defaultModel = "MiniMax-M2.7"
+        ),
+        ProviderPreset(
+            id = "siliconflow",
+            name = "硅基流动 SiliconFlow",
+            endpoint = "https://api.siliconflow.cn/v1/chat/completions",
+            defaultModel = ""
+        ),
+        ProviderPreset(
+            id = "volcengine",
+            name = "火山方舟 / 豆包",
+            endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+            defaultModel = "doubao-seed-2-0-lite-260215"
+        ),
+        ProviderPreset(
+            id = "qianfan",
+            name = "百度智能云千帆",
+            endpoint = "https://qianfan.baidubce.com/v2/chat/completions",
+            defaultModel = ""
+        ),
+        ProviderPreset(
+            id = "custom",
+            name = "自定义 OpenAI-compatible",
+            endpoint = "",
+            defaultModel = "",
+            mainland = false,
+            supportsStreaming = false
+        )
+    )
+
+    fun byId(id: String): ProviderPreset? = all.firstOrNull { it.id == id }
+}
 
 data class AgentThread(
     val id: String = UUID.randomUUID().toString(),

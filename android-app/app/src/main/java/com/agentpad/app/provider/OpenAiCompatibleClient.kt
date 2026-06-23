@@ -1,5 +1,6 @@
 package com.agentpad.app.provider
 
+import com.agentpad.app.domain.AgentErrorKind
 import com.agentpad.app.domain.MessageRole
 import com.agentpad.app.domain.ProviderSettings
 import com.agentpad.app.domain.TaskPlan
@@ -7,12 +8,16 @@ import com.agentpad.app.domain.ThreadAttachment
 import com.agentpad.app.domain.ThreadMessage
 import com.agentpad.app.policy.ApprovalPolicy
 import java.io.BufferedReader
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
+import java.net.SocketTimeoutException
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 class OpenAiCompatibleClient(
@@ -159,7 +164,7 @@ class OpenAiCompatibleClient(
         settings: ProviderSettings,
         apiKey: String,
         messages: List<ChatMessage>
-    ): String = withContext(Dispatchers.IO) {
+    ): String {
         validateEndpoint(settings.endpoint)
         require(settings.model.isNotBlank()) { "模型名称不能为空" }
         require(apiKey.isNotBlank()) { "API Key 不能为空" }
@@ -180,6 +185,43 @@ class OpenAiCompatibleClient(
             )
             .put("stream", false)
 
+        var attempt = 0
+        while (true) {
+            try {
+                return executeRequest(settings, apiKey, payload)
+            } catch (failure: ProviderException) {
+                if (!failure.retryable || attempt >= MAX_RETRIES) throw failure
+                delay(RETRY_DELAYS_MS[attempt])
+                attempt += 1
+            } catch (failure: SocketTimeoutException) {
+                if (attempt >= MAX_RETRIES) {
+                    throw ProviderException(
+                        "模型请求超时，请检查网络或稍后重试",
+                        AgentErrorKind.NETWORK_TIMEOUT,
+                        retryable = true
+                    )
+                }
+                delay(RETRY_DELAYS_MS[attempt])
+                attempt += 1
+            } catch (failure: IOException) {
+                if (attempt >= MAX_RETRIES) {
+                    throw ProviderException(
+                        "无法连接模型服务：${failure.message.orEmpty().take(160)}",
+                        AgentErrorKind.PROVIDER_RETRYABLE,
+                        retryable = true
+                    )
+                }
+                delay(RETRY_DELAYS_MS[attempt])
+                attempt += 1
+            }
+        }
+    }
+
+    private suspend fun executeRequest(
+        settings: ProviderSettings,
+        apiKey: String,
+        payload: JSONObject
+    ): String = withContext(Dispatchers.IO) {
         val connection = (URL(settings.endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 20_000
@@ -198,14 +240,21 @@ class OpenAiCompatibleClient(
             val source = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = source?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
             if (status !in 200..299) {
-                throw ProviderException("HTTP $status: ${sanitize(body, apiKey).take(500)}")
+                throw httpException(status, sanitize(body, apiKey))
             }
-            val root = JSONObject(body)
-            val content = root.getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .optString("content")
-                .trim()
+            val content = try {
+                JSONObject(body).getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .optString("content")
+                    .trim()
+            } catch (failure: JSONException) {
+                throw ProviderException(
+                    "模型接口返回了无法识别的响应结构",
+                    AgentErrorKind.INVALID_RESPONSE,
+                    retryable = false
+                )
+            }
             require(content.isNotEmpty()) { "模型返回了空内容" }
             content
         } finally {
@@ -227,11 +276,26 @@ class OpenAiCompatibleClient(
             .replace(apiKey, "***REDACTED***")
             .replace(Regex("""sk-[A-Za-z0-9_-]{8,}"""), "***REDACTED***")
 
+    private fun httpException(status: Int, body: String): ProviderException {
+        val message = "HTTP $status: ${body.take(500)}"
+        return when {
+            status == 429 -> ProviderException(message, AgentErrorKind.RATE_LIMITED, retryable = true)
+            status in 500..599 -> ProviderException(message, AgentErrorKind.PROVIDER_RETRYABLE, retryable = true)
+            else -> ProviderException(message, AgentErrorKind.PROVIDER_REJECTED, retryable = false)
+        }
+    }
+
     private data class ChatMessage(val role: String, val content: String)
 
     private companion object {
         const val MAX_DOCUMENT_CHARS = 120_000
+        const val MAX_RETRIES = 2
+        val RETRY_DELAYS_MS = longArrayOf(800L, 1_600L)
     }
 }
 
-class ProviderException(message: String) : RuntimeException(message)
+class ProviderException(
+    message: String,
+    val kind: AgentErrorKind = AgentErrorKind.LOCAL_FAILURE,
+    val retryable: Boolean = false
+) : RuntimeException(message)

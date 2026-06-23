@@ -162,6 +162,27 @@ class AgentPadRepository(
         threadDao.touchThread(threadId, ThreadStatus.ACTIVE.name, now)
     }
 
+    suspend fun addAssistantResult(threadId: String, turnId: String?, content: String) {
+        val now = System.currentTimeMillis()
+        threadDao.insertMessage(
+            ThreadMessage(
+                threadId = threadId,
+                turnId = turnId,
+                role = MessageRole.ASSISTANT,
+                kind = MessageKind.RESULT,
+                content = content,
+                createdAt = now
+            ).toEntity()
+        )
+        threadDao.touchThread(threadId, ThreadStatus.ACTIVE.name, now)
+    }
+
+    suspend fun removeAttachment(attachmentId: String): ThreadAttachment? {
+        val attachment = threadDao.getAttachment(attachmentId)?.toDomain() ?: return null
+        threadDao.deleteAttachment(attachmentId)
+        return attachment.takeIf { threadDao.countAttachmentsByUri(it.uri) == 0 }
+    }
+
     suspend fun deleteThread(threadId: String): List<ThreadAttachment> {
         val attachments = threadDao.getAttachments(threadId).map { it.toDomain() }
         auditDao.deleteForThread(threadId)

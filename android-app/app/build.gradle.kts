@@ -32,8 +32,8 @@ android {
         applicationId = "com.agentpad.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 211
-        versionName = "0.2.1-alpha.1"
+        versionCode = 221
+        versionName = "0.2.2-alpha.1"
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("String", "BUILD_CHANNEL", "\"development\"")
 

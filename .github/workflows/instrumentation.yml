@@ -40,7 +40,7 @@ jobs:
           disable-animations: true
           script: |
             cd android-app && chmod +x gradlew
-            cd android-app && ./gradlew --no-daemon connectedDebugAndroidTest || {
+            ./gradlew --no-daemon connectedDebugAndroidTest || {
               adb logcat -d > app/build/reports/instrumentation-logcat.txt
               exit 1
             }

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentPad Simple Preview</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span>AP</span>
+          <div>
+            <strong>AgentPad</strong>
+            <small>local workspace</small>
+          </div>
+        </div>
+
+        <button class="new-chat">+ New chat</button>
+
+        <nav class="nav">
+          <button class="active" data-view="chat">Chat</button>
+          <button data-view="tasks">Tasks</button>
+          <button data-view="settings">Settings</button>
+        </nav>
+
+        <p class="label">Recent</p>
+        <button class="thread active">
+          <strong>简化 AgentPad UI</strong>
+          <small>Codex-style workspace</small>
+        </button>
+        <button class="thread">
+          <strong>模型配置</strong>
+          <small>DeepSeek / 通义 / Kimi</small>
+        </button>
+      </aside>
+
+      <section class="main">
+        <header class="topbar">
+          <div>
+            <small>Current chat</small>
+            <h1 id="title">简化 AgentPad UI</h1>
+          </div>
+          <span class="model">DeepSeek · deepseek-v4-flash</span>
+        </header>
+
+        <section class="view active" id="chat-view">
+          <div class="messages" id="messages">
+            <article class="empty-state">
+              <span>AP</span>
+              <h2>AgentPad</h2>
+            </article>
+          </div>
+
+          <form class="composer" id="composer">
+            <input id="prompt" placeholder="Ask AgentPad to do something..." />
+            <button class="primary">Plan</button>
+          </form>
+        </section>
+
+        <section class="view" id="tasks-view">
+          <div class="page">
+            <div class="heading">
+              <small>Tasks</small>
+              <h2>No active task</h2>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="settings-view">
+          <div class="page">
+            <div class="heading">
+              <small>Settings</small>
+              <h2>Model</h2>
+            </div>
+            <article class="panel">
+              <h3>Provider</h3>
+              <div class="providers">
+                <button class="selected">DeepSeek</button>
+                <button>通义百炼</button>
+                <button>Kimi</button>
+                <button>智谱 GLM</button>
+                <button>Custom</button>
+              </div>
+            </article>
+            <article class="panel">
+              <h3>App</h3>
+              <label><input type="checkbox" checked /> Dark theme</label>
+              <label><input type="checkbox" /> Privacy mode</label>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="active" data-view="chat">Chat</button>
+      <button data-view="tasks">Tasks</button>
+      <button data-view="settings">Settings</button>
+    </nav>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -27,6 +27,7 @@ class SettingsStore(private val context: Context) {
         val providerId = stringPreferencesKey("provider_id")
         val endpoint = stringPreferencesKey("endpoint")
         val model = stringPreferencesKey("model")
+        val streamingEnabled = booleanPreferencesKey("streaming_enabled")
         val visionEndpoint = stringPreferencesKey("vision_endpoint")
         val visionModel = stringPreferencesKey("vision_model")
         val theme = stringPreferencesKey("theme")
@@ -38,7 +39,8 @@ class SettingsStore(private val context: Context) {
             providerSettings = ProviderSettings(
                 providerId = values[Keys.providerId] ?: "deepseek",
                 endpoint = values[Keys.endpoint] ?: "https://api.deepseek.com/chat/completions",
-                model = values[Keys.model] ?: "",
+                model = values[Keys.model] ?: "deepseek-v4-flash",
+                streamingEnabled = values[Keys.streamingEnabled] ?: false,
                 visionEndpoint = values[Keys.visionEndpoint] ?: "",
                 visionModel = values[Keys.visionModel] ?: ""
             ),
@@ -56,6 +58,7 @@ class SettingsStore(private val context: Context) {
             values[Keys.providerId] = settings.providerId.trim()
             values[Keys.endpoint] = settings.endpoint.trim()
             values[Keys.model] = settings.model.trim()
+            values[Keys.streamingEnabled] = settings.streamingEnabled
             values[Keys.visionEndpoint] = settings.visionEndpoint.trim()
             values[Keys.visionModel] = settings.visionModel.trim()
         }
