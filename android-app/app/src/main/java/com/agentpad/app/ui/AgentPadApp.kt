@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
@@ -90,7 +91,6 @@ import java.util.Date
 
 private val primarySections = listOf(
     AppSection.THREAD to "Chat",
-    AppSection.PLAN to "Tasks",
     AppSection.SETTINGS to "Settings"
 )
 
@@ -118,8 +118,8 @@ fun AgentPadRoot(
                 viewModel.recordUiContext(state.section, maxWidth.value.toInt())
             }
             when {
-                maxWidth < 680.dp -> CompactLayout(state, threads, viewModel, onExportDiagnostics)
-                else -> DesktopLayout(state, threads, viewModel, onExportDiagnostics)
+                maxWidth < 680.dp -> CompactLayout(state, threads, viewModel, onChooseDocument, onExportDiagnostics)
+                else -> DesktopLayout(state, threads, viewModel, onChooseDocument, onExportDiagnostics)
             }
         }
     }
@@ -139,7 +139,7 @@ private fun Dialogs(
             title = { Text("上下文较长") },
             text = { Text("继续前需要生成一个检查点。原始消息会保留，后续请求会使用摘要。") },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmCompressionAndCreatePlan) {
+                TextButton(onClick = viewModel::confirmCompressionAndSendChat) {
                     Text("生成检查点")
                 }
             },
@@ -189,6 +189,7 @@ private fun CompactLayout(
     state: AgentPadUiState,
     threads: List<AgentThread>,
     viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
     onExportDiagnostics: () -> Unit
 ) {
     Scaffold(
@@ -212,6 +213,7 @@ private fun CompactLayout(
                 state = state,
                 threads = threads,
                 viewModel = viewModel,
+                onChooseDocument = onChooseDocument,
                 onExportDiagnostics = onExportDiagnostics,
                 showCompactThreads = true
             )
@@ -224,6 +226,7 @@ private fun DesktopLayout(
     state: AgentPadUiState,
     threads: List<AgentThread>,
     viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
     onExportDiagnostics: () -> Unit
 ) {
     Row(Modifier.fillMaxSize()) {
@@ -241,6 +244,7 @@ private fun DesktopLayout(
                 state = state,
                 threads = threads,
                 viewModel = viewModel,
+                onChooseDocument = onChooseDocument,
                 onExportDiagnostics = onExportDiagnostics,
                 showCompactThreads = false
             )
@@ -262,7 +266,7 @@ private fun WorkspaceHeader(state: AgentPadUiState, compact: Boolean) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    state.snapshot?.thread?.title ?: "New task",
+                    state.snapshot?.thread?.title ?: "New chat",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -313,7 +317,7 @@ private fun ThreadSidebar(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("AgentPad", fontWeight = FontWeight.Bold)
-                    Text("local workspace", style = MaterialTheme.typography.labelSmall)
+                    Text("agent", style = MaterialTheme.typography.labelSmall)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -404,14 +408,14 @@ private fun SectionContent(
     state: AgentPadUiState,
     threads: List<AgentThread>,
     viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
     onExportDiagnostics: () -> Unit,
     showCompactThreads: Boolean
 ) {
     when (selectedPrimarySection(state.section)) {
-        AppSection.THREAD -> ConversationPage(state, threads, viewModel, showCompactThreads)
-        AppSection.PLAN -> TasksPage(state, viewModel)
+        AppSection.THREAD -> ConversationPage(state, threads, viewModel, onChooseDocument, showCompactThreads)
         AppSection.SETTINGS -> SettingsPage(state, viewModel, onExportDiagnostics)
-        else -> ConversationPage(state, threads, viewModel, showCompactThreads)
+        else -> ConversationPage(state, threads, viewModel, onChooseDocument, showCompactThreads)
     }
 }
 
@@ -420,6 +424,7 @@ private fun ConversationPage(
     state: AgentPadUiState,
     threads: List<AgentThread>,
     viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit,
     showCompactThreads: Boolean
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -439,8 +444,8 @@ private fun ConversationPage(
                     MessageBubble(message)
                 }
             }
-            state.currentPlan?.let { plan ->
-                item { InlineTaskCard(state, plan, viewModel) }
+            state.selectedDocument?.let { document ->
+                item { AuthorizedContentCard(document.name, document.mimeType, viewModel::clearDocument) }
             }
             state.resultNotice?.let { notice ->
                 item { NoticeCard(notice, Success) }
@@ -449,7 +454,7 @@ private fun ConversationPage(
                 item { NoticeCard("${errorPrefix(state.lastErrorKind)}$error", MaterialTheme.colorScheme.error) }
             }
         }
-        PromptBar(state, viewModel)
+        PromptBar(state, viewModel, onChooseDocument)
     }
 }
 
@@ -584,22 +589,55 @@ private fun ApprovalButton(
 }
 
 @Composable
-private fun PromptBar(state: AgentPadUiState, viewModel: AgentPadViewModel) {
+private fun AuthorizedContentCard(
+    name: String,
+    mimeType: String,
+    onClear: () -> Unit
+) {
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.AttachFile, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(mimeType.ifBlank { "unknown" }, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onClear) { Text("Remove") }
+        }
+    }
+}
+
+@Composable
+private fun PromptBar(
+    state: AgentPadUiState,
+    viewModel: AgentPadViewModel,
+    onChooseDocument: () -> Unit
+) {
     Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             OutlinedTextField(
                 value = state.draftGoal,
                 onValueChange = viewModel::setDraftGoal,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Ask AgentPad to do something...") },
+                placeholder = { Text("Message AgentPad...") },
                 minLines = 1,
                 maxLines = 4,
                 enabled = !state.busy
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = onChooseDocument, enabled = !state.busy) {
+                    Icon(Icons.Rounded.AttachFile, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Read")
+                }
                 Text(
-                    if (state.busy) "Working..." else "",
+                    when {
+                        state.busy -> "Agent is reading..."
+                        state.selectedDocument != null -> "Content granted"
+                        state.attachments.isNotEmpty() -> "Chat content available"
+                        else -> ""
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f)
@@ -608,36 +646,12 @@ private fun PromptBar(state: AgentPadUiState, viewModel: AgentPadViewModel) {
                     OutlinedButton(onClick = viewModel::cancelTurn) { Text("Cancel") }
                 }
                 Button(
-                    onClick = viewModel::createPlan,
+                    onClick = viewModel::sendChat,
                     enabled = state.draftGoal.isNotBlank() && !state.busy
                 ) {
-                    Text(if (state.currentPlan == null) "Plan" else "New plan")
+                    Text("Send")
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun TasksPage(state: AgentPadUiState, viewModel: AgentPadViewModel) {
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item { PageHeading("Tasks") }
-        val plan = state.currentPlan
-        if (plan == null) {
-            item {
-                Panel {
-                    Text("No active task", fontWeight = FontWeight.Bold)
-                }
-            }
-            return@LazyColumn
-        }
-        item { TaskSummaryCard(state, plan, viewModel) }
-        items(plan.actions, key = { it.id }) { action ->
-            ActionRow(state, plan, action, viewModel)
         }
     }
 }
@@ -774,6 +788,22 @@ private fun SettingsPage(
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
+                    value = settings.visionEndpoint,
+                    onValueChange = { viewModel.setProviderSettings(settings.copy(visionEndpoint = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Vision endpoint") },
+                    singleLine = true
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = settings.visionModel,
+                    onValueChange = { viewModel.setProviderSettings(settings.copy(visionModel = it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Vision model") },
+                    singleLine = true
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
                     value = state.apiKeyDraft,
                     onValueChange = viewModel::setApiKeyDraft,
                     modifier = Modifier.fillMaxWidth(),
@@ -794,6 +824,16 @@ private fun SettingsPage(
         item {
             Panel {
                 Text("App", fontWeight = FontWeight.Bold)
+                SettingSwitchRow(
+                    title = "Agent reads chat content",
+                    checked = state.agentAutoReadEnabled,
+                    onChange = viewModel::setAgentAutoReadEnabled
+                )
+                SettingSwitchRow(
+                    title = "Agent reads images",
+                    checked = state.agentReadImagesEnabled,
+                    onChange = viewModel::setAgentReadImagesEnabled
+                )
                 SettingSwitchRow(
                     title = "Dark theme",
                     checked = state.theme == ThemePreference.DARK,
@@ -899,13 +939,13 @@ private fun RiskBadge(risk: RiskLevel) {
 
 private fun selectedPrimarySection(section: AppSection): AppSection = when (section) {
     AppSection.THREAD -> AppSection.THREAD
-    AppSection.PLAN, AppSection.APPROVALS, AppSection.CAPABILITIES -> AppSection.PLAN
+    AppSection.PLAN, AppSection.APPROVALS, AppSection.CAPABILITIES -> AppSection.THREAD
     AppSection.SETTINGS -> AppSection.SETTINGS
 }
 
 private fun sectionIcon(section: AppSection) = when (section) {
     AppSection.THREAD -> Icons.Rounded.AutoAwesome
-    AppSection.PLAN, AppSection.APPROVALS, AppSection.CAPABILITIES -> Icons.Rounded.Description
+    AppSection.PLAN, AppSection.APPROVALS, AppSection.CAPABILITIES -> Icons.Rounded.AutoAwesome
     AppSection.SETTINGS -> Icons.Rounded.Settings
 }
 

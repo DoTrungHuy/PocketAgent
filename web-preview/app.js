@@ -1,7 +1,6 @@
 const labels = {
-  chat: "简化 AgentPad UI",
-  tasks: "Review before action",
-  settings: "Model connection",
+  chat: "New chat",
+  settings: "Model",
 };
 
 const navButtons = [...document.querySelectorAll("[data-view]")];
@@ -10,6 +9,7 @@ const title = document.querySelector("#title");
 const form = document.querySelector("#composer");
 const prompt = document.querySelector("#prompt");
 const messages = document.querySelector("#messages");
+const authorize = document.querySelector("#authorize");
 
 function setView(view) {
   views.forEach((item) => item.classList.toggle("active", item.id === `${view}-view`));
@@ -40,6 +40,10 @@ form.addEventListener("submit", (event) => {
   addBubble(value, "user");
   prompt.value = "";
   setTimeout(() => {
-    addBubble("Plan created.", "agent");
+    addBubble("I can answer with the content you authorized for this chat.", "agent");
   }, 280);
+});
+
+authorize.addEventListener("click", () => {
+  addBubble("Phone content granted for this chat.", "agent");
 });

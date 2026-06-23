@@ -48,10 +48,13 @@ class MainActivity : ComponentActivity() {
                 onChooseDocument = {
                     openDocument.launch(
                         arrayOf(
+                            "image/*",
                             "text/*",
                             "application/json",
                             "application/xml",
-                            "text/markdown"
+                            "text/markdown",
+                            "application/pdf",
+                            "application/octet-stream"
                         )
                     )
                 },

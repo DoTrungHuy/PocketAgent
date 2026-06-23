@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -28,6 +29,7 @@ import com.agentpad.app.domain.ToolResult
 import com.agentpad.app.domain.TurnStatus
 import com.agentpad.app.policy.ApprovalPolicy
 import com.agentpad.app.policy.ApprovalTokenPolicy
+import com.agentpad.app.provider.ProviderAttachment
 import com.agentpad.app.provider.ProviderException
 import com.agentpad.app.provider.ThreadContextPolicy
 import java.io.ByteArrayOutputStream
@@ -88,6 +90,8 @@ data class AgentPadUiState(
     val lastErrorKind: AgentErrorKind = AgentErrorKind.NONE,
     val auditTrail: List<String> = emptyList(),
     val automationPreviewEnabled: Boolean = false,
+    val agentAutoReadEnabled: Boolean = true,
+    val agentReadImagesEnabled: Boolean = true,
     val resultNotice: String? = null,
     val error: String? = null,
     val busy: Boolean = false
@@ -166,8 +170,6 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             app.repository.interruptActiveTurns()
-            val firstThread = app.repository.observeThreads().first().firstOrNull()
-            firstThread?.let { openThread(it.id) }
         }
         viewModelScope.launch {
             app.settingsStore.preferences.collect { preferences ->
@@ -358,6 +360,127 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
 
     fun clearDocument() {
         _uiState.update { it.copy(selectedDocument = null) }
+    }
+
+    fun sendChat() {
+        val state = _uiState.value
+        if (state.draftGoal.isBlank()) {
+            _uiState.update { it.copy(error = "请输入消息") }
+            return
+        }
+        if (!state.apiKeyConfigured) {
+            _uiState.update { it.copy(section = AppSection.SETTINGS, error = "请先配置并测试模型") }
+            return
+        }
+        if (hasRunningTurn(state.currentTurn)) {
+            _uiState.update { it.copy(error = "当前对话仍在回复，请先等待或取消") }
+            return
+        }
+        val messages = state.snapshot?.messages.orEmpty()
+        if (contextPolicy.needsCompression(messages)) {
+            _uiState.update { it.copy(compressionRequired = true, error = null) }
+            return
+        }
+        sendChatAfterContextReady()
+    }
+
+    fun confirmCompressionAndSendChat() {
+        val state = _uiState.value
+        val threadId = state.selectedThreadId ?: return
+        val history = contextPolicy.requestMessages(state.snapshot?.messages.orEmpty())
+        viewModelScope.launch {
+            setBusy(true)
+            try {
+                val summary = app.providerClient.compressContext(
+                    history = history,
+                    settings = state.providerSettings,
+                    apiKey = requireApiKey()
+                )
+                app.repository.addContextSummary(threadId, summary)
+                loadSelectedThread()
+                _uiState.update { it.copy(compressionRequired = false) }
+                setBusy(false)
+                sendChatAfterContextReady()
+            } catch (failure: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        error = failure.safeMessage(),
+                        lastErrorKind = failure.errorKind(),
+                        compressionRequired = false
+                    )
+                }
+                setBusy(false)
+            }
+        }
+    }
+
+    private fun sendChatAfterContextReady() {
+        if (activeWorkJob?.isActive == true || _uiState.value.busy) return
+        val state = _uiState.value
+        val prompt = state.draftGoal.trim()
+        val history = contextPolicy.requestMessages(state.snapshot?.messages.orEmpty())
+        val selectedDocument = state.selectedDocument
+        val attachment = selectedDocument?.toAttachment()
+        setBusy(true)
+        activeWorkJob = viewModelScope.launch {
+            var turn: AgentTurn? = null
+            try {
+                _uiState.update {
+                    it.copy(
+                        runningStep = "模型回复",
+                        lastErrorKind = AgentErrorKind.NONE,
+                        resultNotice = null,
+                        error = null
+                    )
+                }
+                val providerAttachments = withContext(Dispatchers.IO) {
+                    authorizedProviderAttachments(state, selectedDocument)
+                }
+                turn = app.repository.beginChatTurn(state.selectedThreadId, prompt, attachment)
+                _uiState.update {
+                    it.copy(
+                        selectedThreadId = turn?.threadId,
+                        section = AppSection.THREAD,
+                        draftGoal = "",
+                        selectedDocument = null
+                    )
+                }
+                loadSelectedThread()
+                val reply = app.providerClient.chatReply(
+                    prompt = prompt,
+                    history = history,
+                    attachments = providerAttachments,
+                    settings = state.providerSettings,
+                    apiKey = requireApiKey()
+                )
+                app.repository.completeChatTurn(requireNotNull(turn), reply)
+                _uiState.update {
+                    it.copy(
+                        resultNotice = null,
+                        runningStep = null,
+                        error = null
+                    )
+                }
+                loadSelectedThread()
+            } catch (_: CancellationException) {
+                // cancelTurn records the terminal state and clears approvals.
+            } catch (failure: Throwable) {
+                turn?.let {
+                    app.repository.failChatTurn(it, failure.safeMessage())
+                }
+                _uiState.update {
+                    it.copy(
+                        error = failure.safeMessage(),
+                        lastErrorKind = failure.errorKind(),
+                        resultNotice = null
+                    )
+                }
+                loadSelectedThread()
+            } finally {
+                activeWorkJob = null
+                setBusy(false)
+            }
+        }
     }
 
     fun createPlan() {
@@ -726,6 +849,14 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun setAgentAutoReadEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(agentAutoReadEnabled = enabled, error = null) }
+    }
+
+    fun setAgentReadImagesEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(agentReadImagesEnabled = enabled, error = null) }
+    }
+
     private suspend fun executeActions(turn: AgentTurn, plan: TaskPlan): String {
         var finalResult = "任务步骤已完成"
         for (action in plan.actions.take(plan.maxSteps)) {
@@ -857,12 +988,6 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
         var name = "已选择的文件"
         var size: Long? = null
         val mimeType = resolver.getType(uri).orEmpty().lowercase()
-        require(
-            mimeType.startsWith("text/") ||
-                mimeType in setOf("application/json", "application/xml", "application/octet-stream")
-        ) {
-            "当前版本只支持文本、JSON 和 XML 文件"
-        }
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
             ?.use { cursor ->
                 if (cursor.moveToFirst()) {
@@ -870,13 +995,95 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
                     if (!cursor.isNull(1)) size = cursor.getLong(1)
                 }
             }
-        require((size ?: 0L) <= MAX_DOCUMENT_BYTES) { "当前版本只读取 1 MB 以内的文本文件" }
+        require((size ?: 0L) <= MAX_FILE_BYTES) { "文件超过当前版本的 8 MB 授权限制" }
         return SelectedDocument(uri, name.take(200), mimeType, size)
     }
 
-    private suspend fun readDocument(uri: Uri): String = withContext(Dispatchers.IO) {
+    private fun authorizedProviderAttachments(
+        state: AgentPadUiState,
+        selectedDocument: SelectedDocument?
+    ): List<ProviderAttachment> {
+        val selectedUri = selectedDocument?.uri?.toString()
+        val persisted = if (state.agentAutoReadEnabled) {
+            state.attachments
+                .asReversed()
+                .distinctBy { it.uri }
+                .filter { it.uri != selectedUri }
+                .take(MAX_AUTO_ATTACHMENTS)
+                .asReversed()
+                .mapNotNull { attachment ->
+                    runCatching { readProviderAttachment(attachment, state.agentReadImagesEnabled) }.getOrNull()
+                }
+        } else {
+            emptyList()
+        }
+        val selected = selectedDocument?.let { readProviderAttachment(it, state.agentReadImagesEnabled) }
+        return (persisted + listOfNotNull(selected)).takeLast(MAX_AUTO_ATTACHMENTS + 1)
+    }
+
+    private fun readProviderAttachment(
+        document: SelectedDocument,
+        includeImages: Boolean
+    ): ProviderAttachment = readProviderAttachment(
+        uri = document.uri,
+        name = document.name,
+        mimeType = document.mimeType,
+        size = document.size,
+        includeImages = includeImages
+    )
+
+    private fun readProviderAttachment(
+        attachment: ThreadAttachment,
+        includeImages: Boolean
+    ): ProviderAttachment = readProviderAttachment(
+        uri = Uri.parse(attachment.uri),
+        name = attachment.name,
+        mimeType = attachment.mimeType,
+        size = attachment.size,
+        includeImages = includeImages
+    )
+
+    private fun readProviderAttachment(
+        uri: Uri,
+        name: String,
+        mimeType: String,
+        size: Long?,
+        includeImages: Boolean
+    ): ProviderAttachment {
+        val normalizedType = mimeType.lowercase()
+        return when {
+            isReadableText(normalizedType, name) -> ProviderAttachment(
+                name = name,
+                mimeType = normalizedType,
+                size = size,
+                text = readDocument(uri)
+            )
+            includeImages && normalizedType.startsWith("image/") -> ProviderAttachment(
+                name = name,
+                mimeType = normalizedType,
+                size = size,
+                imageDataUri = readImageDataUri(uri, normalizedType)
+            )
+            else -> ProviderAttachment(name = name, mimeType = normalizedType, size = size)
+        }
+    }
+
+    private fun isReadableText(mimeType: String, name: String): Boolean =
+        mimeType.startsWith("text/") ||
+            mimeType in setOf(
+                "application/json",
+                "application/xml",
+                "application/javascript",
+                "application/octet-stream"
+            ) ||
+            name.endsWith(".md", ignoreCase = true) ||
+            name.endsWith(".txt", ignoreCase = true) ||
+            name.endsWith(".json", ignoreCase = true) ||
+            name.endsWith(".xml", ignoreCase = true)
+
+    private fun readDocument(uri: Uri): String {
         val resolver = getApplication<Application>().contentResolver
-        resolver.openInputStream(uri)?.use { input ->
+        return resolver.openInputStream(uri)?.use { input ->
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(8_192)
             var total = 0
@@ -889,6 +1096,24 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
             }
             output.toString(Charsets.UTF_8.name())
         } ?: error("无法读取所选文件")
+    }
+
+    private fun readImageDataUri(uri: Uri, mimeType: String): String {
+        val resolver = getApplication<Application>().contentResolver
+        val bytes = resolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8_192)
+            var total = 0
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                require(total <= MAX_IMAGE_BYTES) { "图片超过当前版本的 6 MB 限制" }
+                output.write(buffer, 0, read)
+            }
+            output.toByteArray()
+        } ?: error("无法读取所选图片")
+        return "data:$mimeType;base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}"
     }
 
     private fun setBusy(busy: Boolean) {
@@ -918,6 +1143,9 @@ class AgentPadViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val MAX_DOCUMENT_BYTES = 1024 * 1024
+        private const val MAX_IMAGE_BYTES = 6 * 1024 * 1024
+        private const val MAX_FILE_BYTES = 8 * 1024 * 1024
+        private const val MAX_AUTO_ATTACHMENTS = 6
         private const val MAX_GOAL_CHARS = 4_000
         private const val APPROVAL_TTL_MILLIS = 15 * 60 * 1000L
 

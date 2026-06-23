@@ -78,7 +78,9 @@ small,
 .thread,
 .composer button,
 .task-actions button,
-.providers button {
+.providers button,
+.grant,
+.content-row button {
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -209,6 +211,10 @@ h1 {
   color: var(--text);
 }
 
+.empty-state small {
+  margin-top: 8px;
+}
+
 .bubble {
   max-width: 760px;
   padding: 14px;
@@ -274,6 +280,10 @@ h1 {
   padding: 0 18px;
 }
 
+.composer .attach {
+  color: var(--accent);
+}
+
 .page {
   display: grid;
   gap: 14px;
@@ -326,6 +336,41 @@ h1 {
   color: var(--muted);
 }
 
+.grant {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.content-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.content-row:first-of-type {
+  margin-top: 8px;
+}
+
+.content-row > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.content-row strong,
+.content-row small {
+  display: block;
+}
+
 .bottom-nav {
   display: none;
 }
@@ -367,7 +412,7 @@ h1 {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     border-top: 1px solid var(--line);
     background: #15181c;
   }

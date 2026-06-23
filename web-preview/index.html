@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AgentPad Simple Preview</title>
+    <title>AgentPad Agent Preview</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -13,7 +13,7 @@
           <span>AP</span>
           <div>
             <strong>AgentPad</strong>
-            <small>local workspace</small>
+            <small>phone agent</small>
           </div>
         </div>
 
@@ -21,18 +21,17 @@
 
         <nav class="nav">
           <button class="active" data-view="chat">Chat</button>
-          <button data-view="tasks">Tasks</button>
           <button data-view="settings">Settings</button>
         </nav>
 
         <p class="label">Recent</p>
         <button class="thread active">
-          <strong>简化 AgentPad UI</strong>
-          <small>Codex-style workspace</small>
+          <strong>新对话</strong>
+          <small>agent session</small>
         </button>
         <button class="thread">
-          <strong>模型配置</strong>
-          <small>DeepSeek / 通义 / Kimi</small>
+          <strong>图片分析</strong>
+          <small>已授权 2 项内容</small>
         </button>
       </aside>
 
@@ -40,7 +39,7 @@
         <header class="topbar">
           <div>
             <small>Current chat</small>
-            <h1 id="title">简化 AgentPad UI</h1>
+            <h1 id="title">New chat</h1>
           </div>
           <span class="model">DeepSeek · deepseek-v4-flash</span>
         </header>
@@ -50,22 +49,15 @@
             <article class="empty-state">
               <span>AP</span>
               <h2>AgentPad</h2>
+              <small>Mobile agent for authorized phone content.</small>
             </article>
           </div>
 
           <form class="composer" id="composer">
-            <input id="prompt" placeholder="Ask AgentPad to do something..." />
-            <button class="primary">Plan</button>
+            <button type="button" class="attach" id="authorize">Read</button>
+            <input id="prompt" placeholder="Message AgentPad..." />
+            <button class="primary">Send</button>
           </form>
-        </section>
-
-        <section class="view" id="tasks-view">
-          <div class="page">
-            <div class="heading">
-              <small>Tasks</small>
-              <h2>No active task</h2>
-            </div>
-          </div>
         </section>
 
         <section class="view" id="settings-view">
@@ -86,6 +78,8 @@
             </article>
             <article class="panel">
               <h3>App</h3>
+              <label><input type="checkbox" checked /> Agent reads chat content</label>
+              <label><input type="checkbox" checked /> Agent reads images</label>
               <label><input type="checkbox" checked /> Dark theme</label>
               <label><input type="checkbox" /> Privacy mode</label>
             </article>
@@ -96,7 +90,6 @@
 
     <nav class="bottom-nav">
       <button class="active" data-view="chat">Chat</button>
-      <button data-view="tasks">Tasks</button>
       <button data-view="settings">Settings</button>
     </nav>
 

@@ -90,6 +90,91 @@ class AgentPadRepository(
         return stored.toDomain()
     }
 
+    suspend fun beginChatTurn(
+        threadId: String?,
+        prompt: String,
+        attachment: ThreadAttachment?
+    ): AgentTurn {
+        val now = System.currentTimeMillis()
+        val resolvedThreadId = threadId ?: UUID.randomUUID().toString()
+        val title = prompt.lineSequence().firstOrNull().orEmpty().take(80).ifBlank { "新对话" }
+        val newThread = if (threadId == null) {
+            AgentThreadEntity(
+                id = resolvedThreadId,
+                title = title,
+                status = ThreadStatus.ACTIVE.name,
+                createdAt = now,
+                updatedAt = now
+            )
+        } else {
+            null
+        }
+        val turn = AgentTurn(
+            threadId = resolvedThreadId,
+            ordinal = 0,
+            goal = prompt,
+            plan = null,
+            status = TurnStatus.RUNNING,
+            result = null,
+            createdAt = now,
+            updatedAt = now
+        )
+        val stored = threadDao.insertTurnBundle(
+            newThread = newThread,
+            turn = turn.toEntity(title = title),
+            message = ThreadMessage(
+                threadId = resolvedThreadId,
+                turnId = turn.id,
+                role = MessageRole.USER,
+                kind = MessageKind.GOAL,
+                content = prompt,
+                createdAt = now
+            ).toEntity(),
+            attachment = attachment
+                ?.copy(threadId = resolvedThreadId, turnId = turn.id)
+                ?.toEntity(),
+            now = now
+        )
+        audit(stored.id, null, "CHAT_STARTED", "聊天请求已发送")
+        return stored.toDomain()
+    }
+
+    suspend fun completeChatTurn(turn: AgentTurn, reply: String): AgentTurn {
+        val now = System.currentTimeMillis()
+        val updated = turn.copy(
+            status = TurnStatus.COMPLETED,
+            result = reply,
+            updatedAt = now
+        )
+        threadDao.upsertTurn(updated.toEntity(turn.goal.take(80)))
+        threadDao.insertMessage(
+            ThreadMessage(
+                threadId = turn.threadId,
+                turnId = turn.id,
+                role = MessageRole.ASSISTANT,
+                kind = MessageKind.RESULT,
+                content = reply,
+                createdAt = now
+            ).toEntity()
+        )
+        threadDao.touchThread(turn.threadId, ThreadStatus.ACTIVE.name, now)
+        audit(turn.id, null, "CHAT_COMPLETED", "聊天回复已保存")
+        return updated
+    }
+
+    suspend fun failChatTurn(turn: AgentTurn, error: String): AgentTurn {
+        val now = System.currentTimeMillis()
+        val updated = turn.copy(
+            status = TurnStatus.FAILED,
+            result = error,
+            updatedAt = now
+        )
+        threadDao.upsertTurn(updated.toEntity(turn.goal.take(80)))
+        threadDao.touchThread(turn.threadId, ThreadStatus.ACTIVE.name, now)
+        audit(turn.id, null, "CHAT_FAILED", error)
+        return updated
+    }
+
     suspend fun savePlan(turn: AgentTurn, plan: TaskPlan): AgentTurn {
         val now = System.currentTimeMillis()
         val updated = turn.copy(

@@ -1,20 +1,28 @@
 # AgentPad
 
-AgentPad 是面向中国大陆网络环境、同时适配 Android 手机和平板的开源 AI Agent 工作台。它不是普通聊天框，而是在 Android 安全边界内完成“多轮任务 → 计划 → 审批 → 执行 → 验证 → 审计”的本地工作流。
+AgentPad 是面向中国大陆网络环境、同时适配 Android 手机和平板的开源手机 Agent。它用类似 GPT 的聊天入口承载 Agent 能力：每次打开默认进入新对话，历史对话保留在侧栏；在用户授权后，Agent 可以读取当前会话允许的手机文件和图片作为上下文。
 
 ## 下载
 
 当前正式签名预发布版：
 
-[直接下载 AgentPad v0.2.2-alpha.1 APK](https://github.com/DoTrungHuy/AgentPad/releases/download/v0.2.2-alpha.1/AgentPad-v0.2.2-alpha.1.apk)
+[直接下载 AgentPad v0.2.3-alpha.1 APK](https://github.com/DoTrungHuy/AgentPad/releases/download/v0.2.3-alpha.1/AgentPad-v0.2.3-alpha.1.apk)
 
-[查看发布说明、SHA256、签名证书指纹和 SBOM](https://github.com/DoTrungHuy/AgentPad/releases/tag/v0.2.2-alpha.1)
+[查看发布说明、SHA256、签名证书指纹和 SBOM](https://github.com/DoTrungHuy/AgentPad/releases/tag/v0.2.3-alpha.1)
 
 Android 会显示标准安装确认。AgentPad 不要求安装 Termux、Google Play、Google 登录或 Google Services。升级包继续使用 v0.2.0 的正式签名，可覆盖安装并保留本地数据。
 
-> `v0.2.2-alpha.1` 是预发布测试版本。长期下载入口只指向正式签名 APK；名称含短 Git SHA 的 Debug 产物仅供开发排错。
+> `v0.2.3-alpha.1` 是预发布测试版本。长期下载入口只指向正式签名 APK；名称含短 Git SHA 的 Debug 产物仅供开发排错。
 
-`v0.2.2-alpha.1` 重点改成更接近 Codex / Zed 的简洁工作台，保留聊天、任务审批和模型设置三条主线。
+`v0.2.3-alpha.1` 重点改成移动端 Agent 对话入口，保留左侧历史、新对话、模型设置和聊天框内按需读取手机内容。
+
+## v0.2.3 开发重点
+
+- GPT 式 Agent 入口：启动默认新对话，历史对话保留在左侧。
+- 主界面收敛为 Chat 和 Settings，不再把用户强制带入任务工作流。
+- Agent 可自动读取当前会话已授权内容；文本文件读取正文，图片以模型可接收的 image data URI 传入。
+- 文件/图片访问通过 Android 系统选择器授权，入口放在聊天框旁边。
+- 可选视觉模型 endpoint/model，用于图片理解。
 
 ## v0.2.2 开发重点
 
